@@ -151,7 +151,7 @@ Questionnaire answers are kept in `sessionStorage` on the device. They are not u
 
 ## Deploy
 
-Cloudflare's Git integration for this repo runs Workers Builds, which calls `wrangler deploy`. A file that only has `pages_build_output_dir` has no Worker entry, and that deploy fails before it builds. `wrangler.toml` is therefore a Worker:
+Cloudflare's Git integration for this repo runs Workers Builds. Pushes to `main` run `npx wrangler deploy`. Every other branch, including this pull request, runs `npx wrangler preview`. Preview refuses to start unless `wrangler.toml` contains a `previews` block, so that block is present and empty. A file that only has `pages_build_output_dir` has no Worker entry, and that deploy fails before it builds. `wrangler.toml` is therefore a Worker:
 
 - `main = "worker/index.js"` routes `/api/*`, `/unlock/return`, and `/report` to the same handlers as `/functions`.
 - `[assets] directory = "./dist"` serves the static site. `/report` is listed in `run_worker_first`, so the HTML file is not served until the entitlement check passes.

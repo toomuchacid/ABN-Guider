@@ -19,6 +19,11 @@ not_found_handling = "404-page"
 # pipeline would serve the paid pack without checking the entitlement.
 run_worker_first = ["/api/*", "/report", "/report/", "/report.html", "/unlock/return"]
 
+# Pull requests are not the production branch, so Workers Builds runs
+# `npx wrangler preview`. That command stops immediately unless this block
+# exists. It can be empty. Assets and compatibility stay at the top level.
+[previews]
+
 # A KV binding without a real id fails `wrangler deploy` (`bindings must have an "id"`).
 # After `npx wrangler kv namespace create DATA`, uncomment and paste the id:
 # [[kv_namespaces]]
