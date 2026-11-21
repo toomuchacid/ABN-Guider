@@ -1,0 +1,12 @@
+# Cloudflare Pages. Build command: npm run build
+# Output directory: dist
+# KV: one namespace is enough for Phase 1 (entitlements, webhook idempotency,
+# feedback). Replace the placeholder id before deploying. Local
+# `wrangler pages dev` uses a simulated namespace and does not need a real id.
+name = "startup-savvy"
+compatibility_date = "2026-11-21"
+pages_build_output_dir = "dist"
+
+[[kv_namespaces]]
+binding = "DATA"
+id = "00000000000000000000000000000001"
