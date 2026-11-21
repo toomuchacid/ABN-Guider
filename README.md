@@ -35,7 +35,9 @@ src/pages/              one renderer per page
 src/client/             browser behaviour for the guide, name check, and pack
 src/lib/                name-check contract, guide pack, Stripe signature, entitlement
 src/styles/site.css
-functions/              Pages Functions (checkout, webhook, feedback, paywall)
+functions/              request handlers (checkout, webhook, feedback, paywall)
+worker/index.js         Worker router used by `wrangler deploy`; calls functions/
+wrangler.pages.toml     local `wrangler pages dev` config
 scripts/build.mjs       writes dist/
 test/                   webhook, entitlement, name-check, page copy
 ```
@@ -53,11 +55,13 @@ npm test
 npm run dev
 ```
 
-`npm run dev` builds `dist/` and runs:
+`npm run dev` builds `dist/` and starts Pages locally:
 
 ```bash
 npx wrangler pages dev dist --ip 127.0.0.1 --port 8788
 ```
+
+`wrangler pages dev` only reads `wrangler.toml`, and it rejects `--config`. That file is the Worker config Cloudflare deploys (`main` and `pages_build_output_dir` cannot share a file). `npm run dev` copies `wrangler.pages.toml` into place for the local server, then restores `wrangler.toml` when the server stops. A hard kill can leave the Pages copy behind; restore it from `.wrangler/wrangler.toml.backup` before committing. Both runtimes call the handlers in `/functions`.
 
 Open http://127.0.0.1:8788 . The example `.dev.vars` turns on a localhost-only payment simulation, so you can click through checkout without a Stripe account. The simulate route still builds a Stripe-shaped event and runs it through the signature checker. It answers 404 on any other hostname, even if the flag is set.
 
@@ -79,7 +83,7 @@ Set `BASE_URL` if wrangler is already running and you only want the HTTP checks.
 
 ## Environment variables
 
-Put these in `.dev.vars` locally and in the Cloudflare Pages project for deployment. `.dev.vars` is gitignored. The placeholders in `.dev.vars.example` are not keys.
+Put these in `.dev.vars` locally and in the Cloudflare Worker settings for deployment. `.dev.vars` is gitignored. The placeholders in `.dev.vars.example` are not keys.
 
 | Name | Purpose |
 | --- | --- |
@@ -92,13 +96,21 @@ Generate a cookie secret with `openssl rand -base64 32`. Do not commit the resul
 
 There is one KV binding, `DATA`. It holds entitlements (`entitlement:{id}`), session and payment indexes, webhook event ids, and feedback. One namespace is enough at this size. D1 is a better fit later if you need to query feedback or list purchases. KV has no schema migration, which is why Phase 1 uses it.
 
-Local `wrangler pages dev` simulates KV. The id in `wrangler.toml` is a placeholder. Replace it before the first real deploy:
+Local `wrangler pages dev` simulates KV. `wrangler.pages.toml` uses a placeholder id for that simulator only. A placeholder id fails a real Cloudflare deploy, so `wrangler.toml` does not include a KV binding until you have a real namespace:
 
 ```bash
 npx wrangler kv namespace create DATA
 ```
 
-Paste the id into `wrangler.toml`. That command needs a Cloudflare login, so it is not run by this repo.
+Paste the id into `wrangler.toml`:
+
+```toml
+[[kv_namespaces]]
+binding = "DATA"
+id = "<the id from the command>"
+```
+
+That command needs a Cloudflare login, so it is not run by this repo. Until the binding is there, the site still deploys and the paid pack stays locked. Checkout answers that payments are not configured.
 
 ## Stripe test setup
 
@@ -137,18 +149,27 @@ Feedback posts to `/api/feedback` and is stored in KV. The form asks people not 
 
 Questionnaire answers are kept in `sessionStorage` on the device. They are not uploaded.
 
-## Deploy on Cloudflare Pages
+## Deploy
+
+Cloudflare's Git integration for this repo runs Workers Builds, which calls `wrangler deploy`. A file that only has `pages_build_output_dir` has no Worker entry, and that deploy fails before it builds. `wrangler.toml` is therefore a Worker:
+
+- `main = "worker/index.js"` routes `/api/*`, `/unlock/return`, and `/report` to the same handlers as `/functions`.
+- `[assets] directory = "./dist"` serves the static site. `/report` is listed in `run_worker_first`, so the HTML file is not served until the entitlement check passes.
+- `[build] command = "npm run build"` creates `dist/` during deploy. The output directory is gitignored.
+- KV is omitted until a real namespace id exists. See the environment section.
+
+`wrangler pages dev` cannot use that file (`main` and `pages_build_output_dir` cannot sit together). Local development uses `wrangler.pages.toml`, which still loads `/functions`.
 
 1. Push this repo to GitHub.
-2. Create a Pages project from the repo.
-3. Build command: `npm run build`. Output directory: `dist`.
-4. The `/functions` directory is deployed as Pages Functions. Do not move it into `dist`.
-5. Create the KV namespace, set the binding name to `DATA`, and replace the placeholder id.
-6. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `COOKIE_SECRET` in the Pages environment. Do not set `ENABLE_PAYMENT_SIMULATION`.
-7. Point the Stripe webhook at `https://<project>.pages.dev/api/stripe/webhook` (or the custom domain).
-8. Read the draft legal pages with an Australian lawyer before sending traffic.
+2. The existing Workers Builds project named `startup-savvy` picks up `wrangler.toml`. Leave the dashboard deploy command as `npx wrangler deploy`. Wrangler runs `npm run build` itself.
+3. Create the KV namespace and add the binding to `wrangler.toml` (see above).
+4. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `COOKIE_SECRET` as Worker secrets or variables. Do not set `ENABLE_PAYMENT_SIMULATION`.
+5. Point the Stripe webhook at `https://<your-host>/api/stripe/webhook`.
+6. Read the draft legal pages with an Australian lawyer before sending traffic.
 
-`_headers` sends a Content Security Policy, `nosniff`, and a no-store cache on `/report`. The paywall is the middleware in `functions/_middleware.js`, not the cache header.
+If you create a classic Pages project instead, set the build command to `npm run build`, the output directory to `dist`, and the config file to `wrangler.pages.toml` (or copy its KV binding into the Pages dashboard). Do not move `/functions` into `dist`.
+
+`_headers` sends a Content Security Policy, `nosniff`, and a no-store cache on `/report`. The paywall is `functions/_middleware.js` (called by `worker/index.js` on deploy), not the cache header.
 
 ## Legal pages
 
@@ -165,7 +186,7 @@ The split is there so a later migration does not have to untangle a framework.
 | `src/pages/*.js` | Server components. The render functions already take no request data. |
 | `src/client/*.js` | Client components. The guide and name check already talk to DOM nodes and `sessionStorage`. |
 | `src/lib/` | Import unchanged from server code. No Node-only APIs. |
-| `functions/api/*` | `app/api/*/route.js`, or leave them on Cloudflare. |
+| `functions/api/*` and `worker/index.js` | `app/api/*/route.js`, or leave them on Cloudflare. The Worker file only routes. |
 | `functions/_middleware.js` | `middleware.ts`. Keep the paid check on the server. |
 | KV | Same key names, or a table with the same fields. |
 

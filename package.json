@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "dev": "npm run build && wrangler pages dev dist --ip 127.0.0.1 --port 8788",
+    "dev": "npm run build && node scripts/pages-dev.mjs",
     "test": "vitest run",
     "verify": "node scripts/verify-payment-flow.mjs"
   },

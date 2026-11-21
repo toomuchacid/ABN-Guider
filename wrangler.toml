@@ -1,12 +1,26 @@
-# Cloudflare Pages. Build command: npm run build
-# Output directory: dist
-# KV: one namespace is enough for Phase 1 (entitlements, webhook idempotency,
-# feedback). Replace the placeholder id before deploying. Local
-# `wrangler pages dev` uses a simulated namespace and does not need a real id.
+# Cloudflare Workers Builds runs `wrangler deploy` on this file.
+# `main` and `pages_build_output_dir` cannot be in the same file, and
+# `wrangler pages dev` only reads this filename. `npm run dev` swaps in
+# wrangler.pages.toml for the local server, then puts this file back.
+# The Worker calls the same handlers as /functions.
 name = "startup-savvy"
+main = "worker/index.js"
 compatibility_date = "2026-11-21"
-pages_build_output_dir = "dist"
 
-[[kv_namespaces]]
-binding = "DATA"
-id = "00000000000000000000000000000001"
+[build]
+command = "npm run build"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+html_handling = "auto-trailing-slash"
+not_found_handling = "404-page"
+# /report is a real HTML file. The Worker must run first or the asset
+# pipeline would serve the paid pack without checking the entitlement.
+run_worker_first = ["/api/*", "/report", "/report/", "/report.html", "/unlock/return"]
+
+# A KV binding without a real id fails `wrangler deploy` (`bindings must have an "id"`).
+# After `npx wrangler kv namespace create DATA`, uncomment and paste the id:
+# [[kv_namespaces]]
+# binding = "DATA"
+# id = "replace-with-real-namespace-id"

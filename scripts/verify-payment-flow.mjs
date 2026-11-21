@@ -10,6 +10,7 @@ import { copyFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hmacSha256Hex } from '../src/lib/payments/signature.js';
+import { withPagesConfig } from './pages-config.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = process.env.PORT || '8788';
@@ -96,12 +97,19 @@ async function waitForServer(logs) {
 }
 
 function stopWrangler(child) {
-  if (!child?.pid) return;
-  try {
-    process.kill(-child.pid, 'SIGTERM');
-  } catch {
-    child.kill('SIGTERM');
-  }
+  return new Promise((resolve) => {
+    if (!child?.pid) return resolve();
+    const timer = setTimeout(resolve, 4000);
+    child.on('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    try {
+      process.kill(-child.pid, 'SIGTERM');
+    } catch {
+      child.kill('SIGTERM');
+    }
+  });
 }
 
 async function main() {
@@ -118,17 +126,19 @@ async function main() {
   const buildCode = await new Promise((resolve) => build.on('exit', resolve));
   assert(buildCode === 0, 'build failed');
 
-  const server = startWrangler();
-  try {
-    await waitForServer(server.logs);
-    await checks(secret);
-    console.log('Payment flow verified.');
-  } catch (error) {
-    console.error(server.logs());
-    throw error;
-  } finally {
-    stopWrangler(server.child);
-  }
+  await withPagesConfig(async () => {
+    const server = startWrangler();
+    try {
+      await waitForServer(server.logs);
+      await checks(secret);
+      console.log('Payment flow verified.');
+    } catch (error) {
+      console.error(server.logs());
+      throw error;
+    } finally {
+      await stopWrangler(server.child);
+    }
+  });
 }
 
 async function checks(secret) {
@@ -177,8 +187,9 @@ async function checks(secret) {
   const entitlementId = crypto.randomUUID();
   const sessionId = `sim_${crypto.randomUUID().replaceAll('-', '')}`;
   const paymentIntentId = `pi_sim_${sessionId.slice(4)}`;
+  const runTag = crypto.randomUUID().replaceAll('-', '').slice(0, 12);
   const unpaid = await signedPost(secret, {
-    id: 'evt_verify_unpaid',
+    id: `evt_verify_unpaid_${runTag}`,
     type: 'checkout.session.completed',
     data: {
       object: {
@@ -195,8 +206,9 @@ async function checks(secret) {
   const pending = await fetch(`${base}/unlock/return?session_id=${sessionId}`, { redirect: 'manual' });
   assert(pending.status === 200, `unpaid return should keep waiting, got ${pending.status}`);
 
+  const paidEventId = `evt_verify_paid_${runTag}`;
   const paid = await signedPost(secret, {
-    id: 'evt_verify_paid',
+    id: paidEventId,
     type: 'checkout.session.async_payment_succeeded',
     data: {
       object: {
@@ -210,7 +222,7 @@ async function checks(secret) {
   });
   assert(paid.response.status === 200 && paid.body.result?.fulfilled === true, `paid webhook failed ${JSON.stringify(paid.body)}`);
   const again = await signedPost(secret, {
-    id: 'evt_verify_paid',
+    id: paidEventId,
     type: 'checkout.session.async_payment_succeeded',
     data: {
       object: {
@@ -229,7 +241,7 @@ async function checks(secret) {
   assert(grantedReport.status === 200, 'report stayed locked after a signed paid webhook');
 
   const refund = await signedPost(secret, {
-    id: 'evt_verify_refund',
+    id: `evt_verify_refund_${runTag}`,
     type: 'charge.refunded',
     data: { object: { object: 'charge', payment_intent: paymentIntentId, refunded: true } },
   });
