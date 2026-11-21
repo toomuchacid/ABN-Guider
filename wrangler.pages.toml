@@ -1,10 +1,10 @@
 # Used by `npm run dev` and `npm run verify`.
 # `wrangler pages dev` serves dist/ and the Pages Functions in /functions.
-# The placeholder KV id is only for the local simulator.
+# Local dev simulates this namespace; it does not call the remote KV API.
 name = "startup-savvy"
 compatibility_date = "2026-11-21"
 pages_build_output_dir = "dist"
 
 [[kv_namespaces]]
 binding = "DATA"
-id = "00000000000000000000000000000001"
+id = "cb3ee8f2704346158ae519f3b0848acd"

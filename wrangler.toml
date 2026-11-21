@@ -6,6 +6,10 @@
 name = "startup-savvy"
 main = "worker/index.js"
 compatibility_date = "2026-11-21"
+# Keep these on. A deploy with them omitted or false turns the
+# toomuchacid.workers.dev hostname and preview URLs back off.
+workers_dev = true
+preview_urls = true
 
 [build]
 command = "npm run build"
@@ -19,13 +23,18 @@ not_found_handling = "404-page"
 # pipeline would serve the paid pack without checking the entitlement.
 run_worker_first = ["/api/*", "/report", "/report/", "/report.html", "/unlock/return"]
 
+# Entitlements, session indexes, webhook event ids, and feedback.
+# Namespace title: startup-savvy-entitlements.
+[[kv_namespaces]]
+binding = "DATA"
+id = "cb3ee8f2704346158ae519f3b0848acd"
+
 # Pull requests are not the production branch, so Workers Builds runs
 # `npx wrangler preview`. That command stops immediately unless this block
-# exists. It can be empty. Assets and compatibility stay at the top level.
+# exists. Preview bindings are not copied from the top level, so DATA is
+# repeated here. It is the same namespace.
 [previews]
 
-# A KV binding without a real id fails `wrangler deploy` (`bindings must have an "id"`).
-# After `npx wrangler kv namespace create DATA`, uncomment and paste the id:
-# [[kv_namespaces]]
-# binding = "DATA"
-# id = "replace-with-real-namespace-id"
+[[previews.kv_namespaces]]
+binding = "DATA"
+id = "cb3ee8f2704346158ae519f3b0848acd"

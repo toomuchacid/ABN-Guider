@@ -96,21 +96,11 @@ Generate a cookie secret with `openssl rand -base64 32`. Do not commit the resul
 
 There is one KV binding, `DATA`. It holds entitlements (`entitlement:{id}`), session and payment indexes, webhook event ids, and feedback. One namespace is enough at this size. D1 is a better fit later if you need to query feedback or list purchases. KV has no schema migration, which is why Phase 1 uses it.
 
-Local `wrangler pages dev` simulates KV. `wrangler.pages.toml` uses a placeholder id for that simulator only. A placeholder id fails a real Cloudflare deploy, so `wrangler.toml` does not include a KV binding until you have a real namespace:
+The binding is `DATA`, namespace title `startup-savvy-entitlements`, id `cb3ee8f2704346158ae519f3b0848acd`. It is set in `wrangler.toml` for production and again under `[previews]`, because a preview deploy does not copy top-level bindings. `wrangler.pages.toml` uses the same id. Local `wrangler pages dev` simulates that namespace and does not call the remote KV API.
 
-```bash
-npx wrangler kv namespace create DATA
-```
+`workers_dev` and `preview_urls` are both `true`. The workers.dev subdomain is `toomuchacid.workers.dev`. Leaving either flag off in a later deploy turns those URLs off.
 
-Paste the id into `wrangler.toml`:
-
-```toml
-[[kv_namespaces]]
-binding = "DATA"
-id = "<the id from the command>"
-```
-
-That command needs a Cloudflare login, so it is not run by this repo. Until the binding is there, the site still deploys and the paid pack stays locked. Checkout answers that payments are not configured.
+Checkout still answers `not_configured` until `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are set as Worker secrets. The KV binding alone does not start a Stripe session. Do not set `ENABLE_PAYMENT_SIMULATION` on Cloudflare.
 
 ## Stripe test setup
 
@@ -156,14 +146,14 @@ Cloudflare's Git integration for this repo runs Workers Builds. Pushes to `main`
 - `main = "worker/index.js"` routes `/api/*`, `/unlock/return`, and `/report` to the same handlers as `/functions`.
 - `[assets] directory = "./dist"` serves the static site. `/report` is listed in `run_worker_first`, so the HTML file is not served until the entitlement check passes.
 - `[build] command = "npm run build"` creates `dist/` during deploy. The output directory is gitignored.
-- KV is omitted until a real namespace id exists. See the environment section.
+- KV binding `DATA` uses namespace `cb3ee8f2704346158ae519f3b0848acd` at the top level and under `[previews]`.
 
 `wrangler pages dev` cannot use that file (`main` and `pages_build_output_dir` cannot sit together). Local development uses `wrangler.pages.toml`, which still loads `/functions`.
 
 1. Push this repo to GitHub.
 2. The existing Workers Builds project named `startup-savvy` picks up `wrangler.toml`. Leave the dashboard deploy command as `npx wrangler deploy`. Wrangler runs `npm run build` itself.
-3. Create the KV namespace and add the binding to `wrangler.toml` (see above).
-4. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `COOKIE_SECRET` as Worker secrets or variables. Do not set `ENABLE_PAYMENT_SIMULATION`.
+3. The KV namespace is already bound. Do not replace the id unless you create a new namespace.
+4. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `COOKIE_SECRET` as Worker secrets. Until the two Stripe secrets exist, checkout answers that payments are not configured. Do not set `ENABLE_PAYMENT_SIMULATION`.
 5. Point the Stripe webhook at `https://<your-host>/api/stripe/webhook`.
 6. Read the draft legal pages with an Australian lawyer before sending traffic.
 
