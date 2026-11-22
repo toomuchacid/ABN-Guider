@@ -40,6 +40,15 @@ export function renderReport() {
           <a class="btn btn-primary" href="${escapeHtml(brand.officialAbnUrl)}" rel="noopener noreferrer">Continue to the free official ABN application<span class="sr-only"> (opens in a new tab)</span></a>
         </div>
         <p class="fine">GST registration is your decision. The general $75,000 turnover figure is public information, not advice. Street details you left blank should be typed only on the official form. Do not paste a tax file number into this page.</p>
+        <h2>Name check</h2>
+        <p id="name-advice">General information, not legal advice. These lights are not a clearance to use the name, and this page does not lodge an application or fill in a government form.</p>
+        <form id="name-risk-form" class="stack">
+          <label for="risk-name">Name to check</label>
+          <input id="risk-name" name="name" maxlength="180" autocomplete="off" required placeholder="e.g. Harbour & Co">
+          <button class="btn btn-primary" type="submit">Run the checks</button>
+          <p id="name-risk-error" class="form-error" hidden></p>
+        </form>
+        <div id="name-risk-results" class="results" aria-live="polite"></div>
       </div>
     </section>
     <section>

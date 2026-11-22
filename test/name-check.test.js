@@ -50,9 +50,9 @@ describe('name check contract', () => {
     expect(blocked.ok).toBe(false);
     expect(blocked.summary.tone).not.toBe('green');
     expect(phase2Sources.map((item) => item.provider)).toEqual([
-      'Synergy Wholesale',
-      'Synergy Wholesale',
-      'Synergy Wholesale',
+      'DNS',
+      'DNS',
+      'DNS',
       'IP Australia',
       'ASIC',
       'ABN Lookup',

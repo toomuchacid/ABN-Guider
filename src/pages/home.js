@@ -5,8 +5,8 @@ import { escapeHtml } from '../lib/html.js';
 
 function sampleRows() {
   const rows = [
-    ['green', 'Available', '.au domain', 'Illustration only — no exact match in this drawing.'],
-    ['amber', 'Similar', '.com domain', 'Illustration only — a nearby name would need a closer look.'],
+    ['amber', 'Caution', '.au domain', 'Illustration only — a public page does not show this name as available.'],
+    ['amber', 'Similar', '.net.au domain', 'Illustration only — a nearby name would need a closer look.'],
     ['red', 'Taken', 'Business name', 'Illustration only — a matching record would show in red.'],
     ['neutral', 'Check failed', 'Trade marks', 'A failed check stays grey. It is never shown as available.'],
   ];

@@ -23,7 +23,10 @@ not_found_handling = "404-page"
 # pipeline would serve the paid pack without checking the entitlement.
 run_worker_first = ["/api/*", "/report", "/report/", "/report.html", "/unlock/return"]
 
-# Entitlements, session indexes, webhook event ids, and feedback.
+# Entitlements, session indexes, webhook event ids, feedback, and a short
+# name-check cache. Worker secrets are set with `wrangler secret put` and
+# are not written here: ABR_GUID, IPA_CLIENT_ID, IPA_CLIENT_SECRET, IPA_ENV,
+# STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, COOKIE_SECRET.
 # Namespace title: startup-savvy-entitlements.
 [[kv_namespaces]]
 binding = "DATA"

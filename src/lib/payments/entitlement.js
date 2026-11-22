@@ -97,13 +97,18 @@ export function entitlementSetCookie(token, { secure, maxAge = brand.cookieMaxAg
   return parts.join('; ');
 }
 
-export async function requestHasPaidEntitlement({ request, env, now = Date.now() }) {
-  if (!env?.DATA || typeof env.COOKIE_SECRET !== 'string') return false;
+export async function readPaidEntitlement({ request, env, now = Date.now() }) {
+  if (!env?.DATA || typeof env.COOKIE_SECRET !== 'string') return null;
   const token = readCookie(request, brand.cookieName);
   const parsed = await readEntitlementToken(env.COOKIE_SECRET, token, now);
-  if (!parsed) return false;
+  if (!parsed) return null;
   const record = await env.DATA.get(keys.entitlement(parsed.id), 'json');
-  return record?.status === 'paid';
+  if (record?.status !== 'paid') return null;
+  return { id: parsed.id };
+}
+
+export async function requestHasPaidEntitlement(args) {
+  return Boolean(await readPaidEntitlement(args));
 }
 
 export async function issueEntitlementCookie({ request, env, entitlementId, now = Date.now() }) {

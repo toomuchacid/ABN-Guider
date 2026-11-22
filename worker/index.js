@@ -1,6 +1,7 @@
 import { onRequestPost as checkout } from '../functions/api/checkout.js';
 import { onRequestGet as simulatePayment } from '../functions/api/dev/simulate-payment.js';
 import { onRequestPost as feedback } from '../functions/api/feedback.js';
+import { onRequestPost as nameCheck } from '../functions/api/name-check.js';
 import { onRequestPost as stripeWebhook } from '../functions/api/stripe/webhook.js';
 import { onRequest as gateReport } from '../functions/_middleware.js';
 import { onRequestGet as unlockReturn } from '../functions/unlock/return.js';
@@ -33,6 +34,9 @@ export async function dispatch(request, env, fetchAsset) {
   }
   if (path === '/api/feedback') {
     return request.method === 'POST' ? feedback(context) : methodNotAllowed();
+  }
+  if (path === '/api/name-check') {
+    return request.method === 'POST' ? nameCheck(context) : methodNotAllowed();
   }
   if (path === '/api/dev/simulate-payment') {
     return request.method === 'GET' ? simulatePayment(context) : methodNotAllowed();

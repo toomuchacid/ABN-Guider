@@ -22,8 +22,8 @@ export function stubAdapters(now = new Date()) {
       async check(name) {
         return {
           source: 'domain:.au',
-          status: 'available',
-          detail: `Sample only: the mock .au check found no exact match for “${name}”. This is not a live result and not a promise the name is free.`,
+          status: 'risk',
+          detail: `Sample only: the mock .au row is a caution for “${name}”, not a live result and not a promise the name is free.`,
           checkedAt,
         };
       },

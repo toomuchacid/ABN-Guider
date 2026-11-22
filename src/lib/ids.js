@@ -26,4 +26,5 @@ export const keys = {
   event: (id) => `stripe_event:${id}`,
   feedback: (id) => `feedback:${id}`,
   feedbackRate: (bucket) => `feedback_rate:${bucket}`,
+  nameCheckRate: (id, hour) => `namecheck_rate:${id}:${hour}`,
 };

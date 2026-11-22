@@ -4,10 +4,10 @@ export function renderNameCheck() {
   const main = `
     <section class="page-head">
       <div class="wrap prose">
-        <p class="todo" role="note"><strong>TODO (Phase 2):</strong> sample results only. Synergy Wholesale, IP Australia, ASIC and ABN Lookup are not connected. Nothing on this page is a live register search.</p>
+        <p class="todo" role="note"><strong>Not a live register search.</strong> This page does not check ABN Lookup, DNS, trade marks or ASIC, and it will not show a green light. The traffic lights are in the paid application pack.</p>
         <h1>Name check</h1>
-        <p>Type a proposed business name. You’ll get plain-English rows for a .com.au, .au and .com domain, an IP Australia trade mark search, and an ASIC business name search. Today those rows are a fixed sample so the screen can be tried end to end.</p>
-        <p>Green means that one sample check found no exact match. Amber means something similar. Red means a match. Grey means the check failed or could not run — grey is never a clearance.</p>
+        <p>Type a proposed business name. We’ll keep it on this device and, after you unlock the pack, check it there. On this page you only get links to the official searches.</p>
+        <p>In the pack, amber means look closer or the check is not a clearance. Red means an exact ABN name match. Grey means a check failed. Grey and amber are never a green light.</p>
       </div>
     </section>
     <section>
@@ -15,7 +15,7 @@ export function renderNameCheck() {
         <form id="name-check-form" class="panel">
           <label for="business-name">Proposed business name</label>
           <input id="business-name" name="name" maxlength="180" autocomplete="off" required placeholder="e.g. Harbour & Co">
-          <button class="btn btn-primary" type="submit">Show sample result</button>
+          <button class="btn btn-primary" type="submit">Save this name</button>
           <p id="name-check-error" class="form-error" hidden></p>
         </form>
         <div id="name-check-results" class="results" aria-live="polite"></div>
@@ -23,7 +23,7 @@ export function renderNameCheck() {
     </section>`;
   return renderDocument({
     title: 'Name check',
-    description: 'Sample business-name check with plain-English available, similar, taken and failed rows. Live registers are not connected yet.',
+    description: 'Save a proposed business name and open the official registers. The traffic-light check is in the paid pack, not on this page.',
     path: '/name-check',
     main,
     scripts: ['/assets/name-check.js'],

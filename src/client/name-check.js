@@ -1,61 +1,56 @@
-import { labelForSource, toneForStatus } from '../lib/name-check/contract.js';
-import { runNameCheck } from '../lib/name-check/index.js';
+import { safeRegisterHref } from '../lib/name-check/contract.js';
+import { normaliseQuery } from '../lib/name-check/query.js';
+import { officialLinkSet, proposedNameKey } from '../lib/name-check/official-links.js';
 
 const form = document.querySelector('#name-check-form');
 const results = document.querySelector('#name-check-results');
 const error = document.querySelector('#name-check-error');
 
-function pillText(status) {
-  if (status === 'available') return 'Available';
-  if (status === 'risk') return 'Similar';
-  if (status === 'taken') return 'Taken';
-  if (status === 'unknown') return 'Not checked';
-  return 'Check failed';
-}
-
-function row(result) {
-  const tone = toneForStatus(result.status);
-  const item = document.createElement('li');
-  item.className = `risk risk-${tone}`;
-  const pill = document.createElement('span');
-  pill.className = 'pill';
-  pill.textContent = pillText(result.status);
-  const body = document.createElement('div');
-  const source = document.createElement('p');
-  source.className = 'risk-source';
-  source.textContent = labelForSource(result.source);
-  const detail = document.createElement('p');
-  detail.textContent = result.detail;
-  body.append(source, detail);
-  item.append(pill, body);
-  return item;
-}
-
-function render(outcome) {
+function renderLinks(name) {
   results.replaceChildren();
-  const summary = document.createElement('div');
-  summary.className = `panel risk-${outcome.summary.tone}`;
+  const note = document.createElement('div');
+  note.className = 'panel';
   const title = document.createElement('h2');
-  title.textContent = outcome.summary.headline;
+  title.textContent = 'Saved on this device';
   const detail = document.createElement('p');
-  detail.textContent = outcome.summary.detail;
-  summary.append(title, detail);
-  const list = document.createElement('ol');
-  list.className = 'risk-list';
-  for (const result of outcome.results) list.append(row(result));
-  results.append(summary, list);
+  detail.textContent = `“${name}” is saved in this browser. The traffic lights run in the paid pack. These links open the official searches. They are not results, and none of them is a green light.`;
+  const list = document.createElement('ul');
+  list.className = 'split-list';
+  for (const item of officialLinkSet(name)) {
+    const href = safeRegisterHref(item.href);
+    if (!href) continue;
+    const li = document.createElement('li');
+    const heading = document.createElement('h3');
+    heading.textContent = item.source;
+    const paragraph = document.createElement('p');
+    paragraph.textContent = item.detail;
+    const link = document.createElement('a');
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'Open the official search';
+    const extra = document.createElement('span');
+    extra.className = 'sr-only';
+    extra.textContent = ' (opens in a new tab)';
+    link.append(extra);
+    li.append(heading, paragraph, link);
+    list.append(li);
+  }
+  note.append(title, detail, list);
+  results.append(note);
 }
 
-form?.addEventListener('submit', async (event) => {
+form?.addEventListener('submit', (event) => {
   event.preventDefault();
   error.hidden = true;
   const name = String(new FormData(form).get('name') || '');
-  const outcome = await runNameCheck(name);
-  if (!outcome.ok) {
+  const query = normaliseQuery(name);
+  if (!query.ok) {
     error.hidden = false;
-    error.textContent = outcome.error;
+    error.textContent = query.error;
     results.replaceChildren();
     return;
   }
-  render(outcome);
+  sessionStorage.setItem(proposedNameKey, query.name);
+  renderLinks(query.name);
 });
