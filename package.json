@@ -1,0 +1,23 @@
+{
+  "name": "abn-guider",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Startup Savvy — a private Australian guide for checking a business name and preparing an ABN application.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "npm run build && node scripts/pages-dev.mjs",
+    "test": "vitest run",
+    "verify": "node scripts/verify-payment-flow.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.11",
+    "stripe": "^23.0.0",
+    "vitest": "^5.1.1",
+    "wrangler": "^4.50.0"
+  },
+  "license": "Apache-2.0"
+}

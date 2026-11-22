@@ -1,0 +1,40 @@
+# Cloudflare Workers Builds runs `wrangler deploy` on this file.
+# `main` and `pages_build_output_dir` cannot be in the same file, and
+# `wrangler pages dev` only reads this filename. `npm run dev` swaps in
+# wrangler.pages.toml for the local server, then puts this file back.
+# The Worker calls the same handlers as /functions.
+name = "startup-savvy"
+main = "worker/index.js"
+compatibility_date = "2026-11-21"
+# Keep these on. A deploy with them omitted or false turns the
+# toomuchacid.workers.dev hostname and preview URLs back off.
+workers_dev = true
+preview_urls = true
+
+[build]
+command = "npm run build"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+html_handling = "auto-trailing-slash"
+not_found_handling = "404-page"
+# /report is a real HTML file. The Worker must run first or the asset
+# pipeline would serve the paid pack without checking the entitlement.
+run_worker_first = ["/api/*", "/report", "/report/", "/report.html", "/unlock/return"]
+
+# Entitlements, session indexes, webhook event ids, and feedback.
+# Namespace title: startup-savvy-entitlements.
+[[kv_namespaces]]
+binding = "DATA"
+id = "cb3ee8f2704346158ae519f3b0848acd"
+
+# Pull requests are not the production branch, so Workers Builds runs
+# `npx wrangler preview`. That command stops immediately unless this block
+# exists. Preview bindings are not copied from the top level, so DATA is
+# repeated here. It is the same namespace.
+[previews]
+
+[[previews.kv_namespaces]]
+binding = "DATA"
+id = "cb3ee8f2704346158ae519f3b0848acd"
