@@ -23,6 +23,10 @@ function hang(_url, init = {}) {
   });
 }
 
+function requestUrl(value) {
+  return value instanceof URL ? value : new URL(String(value));
+}
+
 describe('DNS name signal', () => {
   it('treats an answer for the host as registered and NXDOMAIN as no DNS', () => {
     expect(classifyDns({ Status: 0, Answer: [{ name: 'harbour-and-co.com.au.', type: 2 }] }, 'harbour-and-co.com.au')).toBe('registered');
@@ -77,8 +81,10 @@ describe('DNS name signal', () => {
       cache: null,
       now,
     });
-    expect(seen[0]).toContain('https://cloudflare-dns.com/dns-query');
-    expect(seen[0]).toContain('type=NS');
+    const first = requestUrl(seen[0]);
+    expect(first.hostname).toBe('cloudflare-dns.com');
+    expect(first.pathname).toBe('/dns-query');
+    expect(first.searchParams.get('type')).toBe('NS');
     expect(rows[0].label).toBe('Likely registered');
     expect(rows[0].status).not.toBe('available');
 
@@ -175,8 +181,10 @@ describe('trade marks', () => {
     });
     expect(called).toBe(false);
     expect(row.status).toBe('risk');
-    expect(row.href).toContain('https://search.ipaustralia.gov.au/trademarks/search/quick/result?q=');
-    expect(row.href).toContain('Harbour');
+    const link = requestUrl(row.href);
+    expect(link.hostname).toBe('search.ipaustralia.gov.au');
+    expect(link.pathname).toBe('/trademarks/search/quick/result');
+    expect(link.searchParams.get('q')).toContain('Harbour');
     expect(row.status).not.toBe('available');
 
     const ignored = await checkTradeMark('Harbour', {
@@ -203,7 +211,11 @@ describe('trade marks', () => {
       cache: null,
       now,
       fetchImpl: async (url) => {
-        if (String(url).includes('access_token')) return new Response(JSON.stringify({ access_token: 'token-value-ok', token_type: 'Bearer' }));
+        const target = requestUrl(url);
+        expect(target.hostname).toBe('test.api.ipaustralia.gov.au');
+        if (target.pathname === '/public/external-token-api/v1/access_token') {
+          return new Response(JSON.stringify({ access_token: 'token-value-ok', token_type: 'Bearer' }));
+        }
         return new Response(JSON.stringify({ results: [] }));
       },
     });
@@ -223,7 +235,7 @@ describe('trade marks', () => {
       fetchImpl: hang,
     });
     expect(timed.status).toBe('error');
-    expect(timed.href).toContain('search.ipaustralia.gov.au');
+    expect(requestUrl(timed.href).hostname).toBe('search.ipaustralia.gov.au');
     expect(timed.status).not.toBe('available');
   });
 });
@@ -289,15 +301,15 @@ describe('paid name-check endpoint', () => {
         timeoutMs: 1000,
         sleep: noSleep,
         fetchImpl: async (url) => {
-          const href = String(url);
-          expect(href).not.toContain(GUID);
-          if (href.includes('cloudflare-dns.com')) {
+          const target = requestUrl(url);
+          expect(target.href).not.toContain(GUID);
+          if (target.hostname === 'cloudflare-dns.com') {
             return new Response(JSON.stringify({ Status: 3 }), { status: 200 });
           }
-          if (href.includes('abr.business.gov.au')) {
+          if (target.hostname === 'abr.business.gov.au') {
             return new Response(`<exception><exceptionDescription>Rejected ${GUID}</exceptionDescription></exception>`, { status: 200 });
           }
-          throw new Error(`unexpected ${href}`);
+          throw new Error(`unexpected ${target.hostname}`);
         },
       },
     });
