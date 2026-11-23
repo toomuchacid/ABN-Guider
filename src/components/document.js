@@ -38,7 +38,7 @@ export function renderDocument({
   <meta name="description" content="${escapeHtml(description)}">
   <meta name="theme-color" content="#0c5c5a">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta http-equiv="Content-Security-Policy" content="${escapeHtml(contentSecurityPolicy())}">
+  <meta http-equiv="Content-Security-Policy" content="${escapeHtml(contentSecurityPolicy({ allowStripeCheckout: path === '/unlock' }))}">
   ${robots}
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/site.css">

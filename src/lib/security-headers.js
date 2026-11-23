@@ -28,8 +28,18 @@ export function analyticsSources() {
   throw new Error(`Unknown analytics provider: ${provider}`);
 }
 
-export function contentSecurityPolicy() {
+/** Hosted Checkout only. Card entry stays on Stripe; this site never frames it. */
+export const STRIPE_CHECKOUT_ORIGIN = 'https://checkout.stripe.com';
+
+export function contentSecurityPolicy({ allowStripeCheckout = false } = {}) {
   const { script, connect } = analyticsSources();
+  // form-action is checked against the URL after redirects. A 303 from
+  // /api/checkout to Checkout is blocked when this stays 'self'.
+  // The return and cancel URLs are same-origin navigations, not form posts,
+  // so they do not need connect-src, frame-src, or a Stripe form-action.
+  const formAction = allowStripeCheckout
+    ? `form-action 'self' ${STRIPE_CHECKOUT_ORIGIN}`
+    : "form-action 'self'";
   return [
     "default-src 'self'",
     `script-src ${script.join(' ')}`,
@@ -39,32 +49,39 @@ export function contentSecurityPolicy() {
     `connect-src ${connect.join(' ')}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    formAction,
     "object-src 'none'",
   ].join('; ');
 }
 
-export function securityHeaderEntries() {
+export function securityHeaderEntries(options) {
   return [
     ['X-Content-Type-Options', 'nosniff'],
     ['Referrer-Policy', 'strict-origin-when-cross-origin'],
     ['X-Frame-Options', 'DENY'],
     ['Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()'],
     ['Cross-Origin-Opener-Policy', 'same-origin'],
-    ['Content-Security-Policy', contentSecurityPolicy()],
+    ['Content-Security-Policy', contentSecurityPolicy(options)],
   ];
 }
 
 export function headersFile() {
-  const base = securityHeaderEntries().map(([key, value]) => `  ${key}: ${value}`);
-  const block = (path, extra = []) => [`${path}`, ...base, ...extra.map((line) => `  ${line}`), ''].join('\n');
+  const lines = (entries, extra = []) => [...entries, ...extra].map(([key, value]) => `  ${key}: ${value}`);
+  const block = (path, entries) => [`${path}`, ...lines(entries), ''].join('\n');
+  const shared = securityHeaderEntries();
+  const unlock = securityHeaderEntries({ allowStripeCheckout: true });
   return [
-    block('/*'),
-    block('/assets/*', ['Cache-Control: public, max-age=3600']),
-    block('/report', ['Cache-Control: no-store', 'X-Robots-Tag: noindex']),
-    block('/report.html', ['Cache-Control: no-store', 'X-Robots-Tag: noindex']),
-    block('/unlock/return', ['Cache-Control: no-store', 'X-Robots-Tag: noindex']),
-    block('/api/*', ['Cache-Control: no-store', 'X-Robots-Tag: noindex']),
+    block('/*', shared),
+    block('/assets/*', [...shared, ['Cache-Control', 'public, max-age=3600']]),
+    block('/report', [...shared, ['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']]),
+    block('/report.html', [...shared, ['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']]),
+    block('/unlock/return', [...shared, ['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']]),
+    block('/unlock/return/', [...shared, ['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']]),
+    block('/api/*', [...shared, ['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']]),
+    // Replaces the /* policy. A second, stricter CSP header would still block Checkout.
+    block('/unlock', unlock),
+    block('/unlock/', unlock),
+    block('/unlock.html', unlock),
   ].join('\n');
 }
 
