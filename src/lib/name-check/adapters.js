@@ -1,8 +1,11 @@
 /**
- * Adapter contract for Phase 2.
+ * Adapter contract for the live name checks.
  *
  * Each adapter:
  *   { source: string, check: (normalisedName: string) => Promise<NameCheckResult | NameCheckResult[]> }
+ *
+ * Domain rows use a DNS lookup so Synergy Wholesale can replace that
+ * function later. Do not scrape WHOIS.
  *
  * NameCheckResult:
  *   { source, status: 'available' | 'taken' | 'risk' | 'unknown' | 'error', detail, checkedAt }
@@ -14,9 +17,9 @@
  */
 
 export const phase2Sources = [
-  { source: 'domain:.com.au', provider: 'Synergy Wholesale' },
-  { source: 'domain:.au', provider: 'Synergy Wholesale' },
-  { source: 'domain:.com', provider: 'Synergy Wholesale' },
+  { source: 'domain:.com.au', provider: 'DNS' },
+  { source: 'domain:.au', provider: 'DNS' },
+  { source: 'domain:.net.au', provider: 'DNS' },
   { source: 'trade-mark', provider: 'IP Australia' },
   { source: 'business-name', provider: 'ASIC' },
   { source: 'abn', provider: 'ABN Lookup' },

@@ -26,7 +26,10 @@ describe('pages', () => {
     expect(renderLegal('disclaimer')).toContain('register.business.gov.au');
     expect(renderUnlock()).toContain(formatAud());
     expect(renderUnlock().toLowerCase()).toContain('not tax, legal or financial advice');
-    expect(renderNameCheck()).toContain('TODO (Phase 2)');
+    expect(renderNameCheck().toLowerCase()).toContain('not a live register search');
+    expect(renderNameCheck()).not.toContain('risk-green');
+    expect(renderHome()).not.toContain('risk-green');
+    expect(renderReport().toLowerCase()).toContain('not legal advice');
     expect(renderReport()).toContain('noindex');
     expect(renderFeedback().toLowerCase()).toContain('tax file number');
   });

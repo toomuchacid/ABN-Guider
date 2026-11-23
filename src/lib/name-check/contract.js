@@ -1,6 +1,6 @@
 /**
- * Phase 2 adapters (Synergy Wholesale domains, ABN Lookup, IP Australia
- * trade marks, ASIC business names) must return this shape.
+ * Live checks (DNS, ABN Lookup, IP Australia, ASIC) return this shape.
+ * Synergy Wholesale can replace the DNS lookup later.
  *
  * input name -> normalised result:
  *   { source, status: available|taken|risk|unknown|error, detail, checkedAt }
@@ -16,11 +16,31 @@ const ALLOWED = new Set(NAME_CHECK_STATUSES);
 export const sourceLabels = {
   'domain:.com.au': '.com.au domain',
   'domain:.au': '.au domain',
+  'domain:.net.au': '.net.au domain',
   'domain:.com': '.com domain',
   'trade-mark': 'IP Australia trade marks',
   'business-name': 'ASIC business names',
   abn: 'ABN Lookup',
 };
+
+const LINK_HOSTS = new Set([
+  'abr.business.gov.au',
+  'search.ipaustralia.gov.au',
+  'www.asic.gov.au',
+  'asic.gov.au',
+]);
+
+/** Only https links to the official registers are kept. */
+export function safeRegisterHref(value) {
+  if (typeof value !== 'string' || value.length > 2000) return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || !LINK_HOSTS.has(url.hostname)) return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Green is reserved for a positive available result.
@@ -46,11 +66,17 @@ export function normaliseResult(input, now = new Date()) {
       : '';
   const detail = typeof input?.detail === 'string' && input.detail.trim() ? input.detail.trim() : fallback;
   const checkedAt = typeof input?.checkedAt === 'string' && input.checkedAt ? input.checkedAt : now.toISOString();
+  const label = typeof input?.label === 'string' && input.label.trim()
+    ? input.label.trim().slice(0, 40)
+    : undefined;
+  const href = safeRegisterHref(input?.href);
   return {
     source: typeof input?.source === 'string' && input.source.trim() ? input.source.trim() : 'unknown',
     status,
     detail,
     checkedAt,
+    ...(label ? { label } : {}),
+    ...(href ? { href } : {}),
   };
 }
 

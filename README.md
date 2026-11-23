@@ -17,13 +17,26 @@ This repository is the platform and payments slice.
 - Cookie-less analytics, off until you set a flag.
 - A feedback form stored in KV. Tax file numbers are refused, not stored.
 
-Live register lookups are not in this phase. The name check returns labelled sample rows. Phase 2 adapters (Synergy Wholesale, ABN Lookup, IP Australia, ASIC) should implement the contract in [`src/lib/name-check/contract.js`](src/lib/name-check/contract.js):
+Phase 1 left the name check as labelled sample rows. The contract is still in [`src/lib/name-check/contract.js`](src/lib/name-check/contract.js):
 
 ```text
 input name -> { source, status: available|taken|risk|unknown|error, detail, checkedAt }
 ```
 
 An upstream error, timeout, or unknown result is `error` or `unknown`. The summary is green only when every row is `available`.
+
+## Phase 2
+
+The live reading is on `/report`, behind the same entitlement check as the pack. The public name-check page only saves the name in this browser and links to the official registers. It does not paint a green light.
+
+| Check | With a secret | Without a secret |
+| --- | --- | --- |
+| ABN Lookup | `ABR_GUID` calls the search-only name method. An exact active-name match is red. Anything else stays amber. It never lodges or pre-fills a form. | Amber: “Live ABN search is not yet available”, plus [abr.business.gov.au](https://abr.business.gov.au/). |
+| Domains | DNS only, for `name.com.au`, `name.au` and `name.net.au`, via Cloudflare DNS-over-HTTPS. A name-server or SOA answer is “Likely registered”. No DNS is “may be available, confirm with a registrar”. Neither is a definitive green. WHOIS is not scraped. `lookup()` is the slot for Synergy Wholesale later. | No domain secret is required. |
+| Trade marks | `IPA_CLIENT_ID`, `IPA_CLIENT_SECRET` and `IPA_ENV=test` call the IP Australia **test** API. Matches and empty results both stay amber. Production is not called. | Amber link to Australian Trade Mark Search, with the name in the `q` parameter. |
+| ASIC business names | No live signal. | Amber link to the [business names register](https://www.asic.gov.au/online-services/search-asic-registers/business-names-register). |
+
+Results are cached in the `DATA` KV binding for about 10 minutes (1 minute for an error). The paid route allows 20 checks an hour. Secrets are Worker secrets. They are named in `wrangler.toml` and `.dev.vars.example` and are not written into the repository.
 
 ## Layout
 
@@ -91,6 +104,10 @@ Put these in `.dev.vars` locally and in the Cloudflare Worker settings for deplo
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `/api/stripe/webhook`. Treat it like an API key. |
 | `COOKIE_SECRET` | Long random string (32+ characters) used to sign the entitlement cookie. |
 | `ENABLE_PAYMENT_SIMULATION` | `true` only on your machine. Leave it unset in Cloudflare. |
+| `ABR_GUID` | ABN Lookup web-services GUID. If it is missing, the paid report shows an amber “not yet available” row. |
+| `IPA_CLIENT_ID` | Optional IP Australia trade mark API client id. |
+| `IPA_CLIENT_SECRET` | Optional IP Australia trade mark API client secret. |
+| `IPA_ENV` | Set to `test` to call the UAT trade mark API. Any other value, including a missing one, uses the official link instead. |
 
 Generate a cookie secret with `openssl rand -base64 32`. Do not commit the result.
 
@@ -153,7 +170,7 @@ Cloudflare's Git integration for this repo runs Workers Builds. Pushes to `main`
 1. Push this repo to GitHub.
 2. The existing Workers Builds project named `startup-savvy` picks up `wrangler.toml`. Leave the dashboard deploy command as `npx wrangler deploy`. Wrangler runs `npm run build` itself.
 3. The KV namespace is already bound. Do not replace the id unless you create a new namespace.
-4. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `COOKIE_SECRET` as Worker secrets. Until the two Stripe secrets exist, checkout answers that payments are not configured. Do not set `ENABLE_PAYMENT_SIMULATION`.
+4. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `COOKIE_SECRET` as Worker secrets. Until the two Stripe secrets exist, checkout answers that payments are not configured. Do not set `ENABLE_PAYMENT_SIMULATION`. When the ABN Lookup GUID arrives, set `ABR_GUID` the same way. `IPA_CLIENT_ID`, `IPA_CLIENT_SECRET` and `IPA_ENV` are optional; the trade mark API runs only when `IPA_ENV` is `test`.
 5. Point the Stripe webhook at `https://<your-host>/api/stripe/webhook`.
 6. Read the draft legal pages with an Australian lawyer before sending traffic.
 

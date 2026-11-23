@@ -8,5 +8,15 @@ STRIPE_WEBHOOK_SECRET=replace_me_webhook_signing_secret
 COOKIE_SECRET=replace_me_with_a_long_random_string_at_least_32_chars
 
 # Local only. The simulate-payment route also refuses any host that is not
-# localhost. Leave this unset on Cloudflare Pages.
+# localhost. Leave this unset on Cloudflare.
 ENABLE_PAYMENT_SIMULATION=true
+
+# Name checks. These placeholders are not secrets. Set the real values with
+# `wrangler secret put` for a deploy, or replace them in the untracked .dev.vars.
+# Leave ABR_GUID as replace_me until the GUID arrives: the report then shows
+# an amber "not yet available" row. The trade mark API is called only when
+# IPA_ENV is exactly test and both IPA values are real.
+ABR_GUID=replace_me
+IPA_CLIENT_ID=replace_me
+IPA_CLIENT_SECRET=replace_me
+IPA_ENV=test

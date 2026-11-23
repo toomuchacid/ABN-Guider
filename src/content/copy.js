@@ -33,7 +33,7 @@ export const home = {
   title: 'Check the name. Prepare the ABN. Then use the free official form.',
   lede: `${brand.name} helps you see how a proposed business name reads, then walks you through the details the free ABN application asks for. You copy the summary and finish on the government site. We never lodge it for you.`,
   priceNote: `The official ABN application is free. This guide is ${formatAud()} once, when you want the copy-ready pack.`,
-  honesty: 'Live domain, trade mark, ASIC and ABN Lookup connections are not switched on yet. The name check you can click through today uses clearly marked sample results.',
+  honesty: 'The public name check does not run the live registers, and it does not show a green light. The traffic lights are in the paid application pack. A failed or unfinished check is never shown as available.',
   steps: [
     {
       title: 'Read a name in plain English',
