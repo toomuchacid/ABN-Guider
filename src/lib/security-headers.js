@@ -28,8 +28,18 @@ export function analyticsSources() {
   throw new Error(`Unknown analytics provider: ${provider}`);
 }
 
-export function contentSecurityPolicy() {
+/** Hosted Checkout only. Card entry stays on Stripe; this site never frames it. */
+export const STRIPE_CHECKOUT_ORIGIN = 'https://checkout.stripe.com';
+
+export function contentSecurityPolicy({ allowStripeCheckout = false } = {}) {
   const { script, connect } = analyticsSources();
+  // form-action is checked against the URL after redirects. A 303 from
+  // /api/checkout to Checkout is blocked when this stays 'self'.
+  // The return and cancel URLs are same-origin navigations, not form posts,
+  // so they do not need connect-src, frame-src, or a Stripe form-action.
+  const formAction = allowStripeCheckout
+    ? `form-action 'self' ${STRIPE_CHECKOUT_ORIGIN}`
+    : "form-action 'self'";
   return [
     "default-src 'self'",
     `script-src ${script.join(' ')}`,
@@ -39,32 +49,70 @@ export function contentSecurityPolicy() {
     `connect-src ${connect.join(' ')}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    formAction,
     "object-src 'none'",
   ].join('; ');
 }
 
-export function securityHeaderEntries() {
+export function securityHeaderEntries(options) {
   return [
     ['X-Content-Type-Options', 'nosniff'],
     ['Referrer-Policy', 'strict-origin-when-cross-origin'],
     ['X-Frame-Options', 'DENY'],
     ['Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()'],
     ['Cross-Origin-Opener-Policy', 'same-origin'],
-    ['Content-Security-Policy', contentSecurityPolicy()],
+    ['Content-Security-Policy', contentSecurityPolicy(options)],
   ];
 }
 
+/**
+ * Cloudflare sends every matching `_headers` policy, and a browser enforces
+ * all of them. The catch-all must not set a Content-Security-Policy, or its
+ * `form-action 'self'` stays in force on /unlock beside the Checkout exception.
+ */
 export function headersFile() {
-  const base = securityHeaderEntries().map(([key, value]) => `  ${key}: ${value}`);
-  const block = (path, extra = []) => [`${path}`, ...base, ...extra.map((line) => `  ${line}`), ''].join('\n');
+  const block = (path, entries) => [path, ...entries.map(([key, value]) => `  ${key}: ${value}`), ''].join('\n');
+  const base = securityHeaderEntries().filter(([name]) => name !== 'Content-Security-Policy');
+  const policy = (allowStripeCheckout) => [['Content-Security-Policy', contentSecurityPolicy({ allowStripeCheckout })]];
+  const strict = policy(false);
+  const checkout = policy(true);
+  const hidden = [['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']];
+  const documents = [
+    '/',
+    '/index.html',
+    '/name-check',
+    '/name-check.html',
+    '/guide',
+    '/guide.html',
+    '/terms',
+    '/terms.html',
+    '/privacy',
+    '/privacy.html',
+    '/disclaimer',
+    '/disclaimer.html',
+    '/refunds',
+    '/refunds.html',
+    '/feedback',
+    '/feedback.html',
+    '/feedback/thanks',
+    '/feedback/thanks.html',
+    '/feedback/rejected',
+    '/feedback/rejected.html',
+    '/404.html',
+  ];
   return [
-    block('/*'),
-    block('/assets/*', ['Cache-Control: public, max-age=3600']),
-    block('/report', ['Cache-Control: no-store', 'X-Robots-Tag: noindex']),
-    block('/report.html', ['Cache-Control: no-store', 'X-Robots-Tag: noindex']),
-    block('/unlock/return', ['Cache-Control: no-store', 'X-Robots-Tag: noindex']),
-    block('/api/*', ['Cache-Control: no-store', 'X-Robots-Tag: noindex']),
+    block('/*', base),
+    block('/assets/*', [['Cache-Control', 'public, max-age=3600']]),
+    block('/api/*', hidden),
+    ...documents.map((path) => block(path, strict)),
+    block('/report', [...strict, ...hidden]),
+    block('/report/', [...strict, ...hidden]),
+    block('/report.html', [...strict, ...hidden]),
+    block('/unlock/return', [...strict, ...hidden]),
+    block('/unlock/return/', [...strict, ...hidden]),
+    block('/unlock', checkout),
+    block('/unlock/', checkout),
+    block('/unlock.html', checkout),
   ].join('\n');
 }
 

@@ -8,7 +8,9 @@ import { renderNameCheck } from '../src/pages/name-check.js';
 import { renderReport } from '../src/pages/report.js';
 import { renderUnlock } from '../src/pages/unlock.js';
 import { packFromAnswers } from '../src/lib/guide/pack.js';
-import { contentSecurityPolicy } from '../src/lib/security-headers.js';
+import { buildCheckoutFields, makeIntegrationId } from '../src/lib/payments/checkout-form.js';
+import { renderPendingPayment } from '../src/pages/misc.js';
+import { contentSecurityPolicy, headersFile } from '../src/lib/security-headers.js';
 import { containsTfnPhrase } from '../src/lib/privacy/tfn.js';
 
 describe('pages', () => {
@@ -32,6 +34,46 @@ describe('pages', () => {
     expect(renderReport().toLowerCase()).toContain('not legal advice');
     expect(renderReport()).toContain('noindex');
     expect(renderFeedback().toLowerCase()).toContain('tax file number');
+  });
+
+  it('lets only the unlock page post to Stripe Checkout', () => {
+    const stripeFormAction = "form-action 'self' https://checkout.stripe.com";
+    const unlockPolicy = contentSecurityPolicy({ allowStripeCheckout: true });
+    expect(unlockPolicy).toContain(stripeFormAction);
+    expect(unlockPolicy).toContain("connect-src 'self'");
+    expect(unlockPolicy).not.toContain('frame-src');
+    expect(contentSecurityPolicy()).toContain("form-action 'self'");
+    expect(contentSecurityPolicy()).not.toContain('checkout.stripe.com');
+    const unlockHtml = renderUnlock().replaceAll('&#39;', "'");
+    expect(unlockHtml).toContain(stripeFormAction);
+    expect(renderHome().replaceAll('&#39;', "'")).not.toContain('checkout.stripe.com');
+
+    const headers = headersFile().split('\n\n');
+    const block = (path) => headers.find((item) => item.startsWith(`${path}\n`));
+    const unlockHeader = block('/unlock');
+    expect(unlockHeader).toContain(stripeFormAction);
+    expect(unlockHeader.match(/Content-Security-Policy/g)).toHaveLength(1);
+    const siteHeader = block('/*');
+    expect(siteHeader).not.toContain('Content-Security-Policy');
+    const homeHeader = block('/');
+    expect(homeHeader).toContain("form-action 'self'");
+    expect(homeHeader).not.toContain('checkout.stripe.com');
+    const returnHeader = block('/unlock/return');
+    expect(returnHeader).toContain("form-action 'self'");
+    expect(returnHeader).not.toContain('checkout.stripe.com');
+    expect(block('/api/*')).not.toContain('Content-Security-Policy');
+
+    const pending = renderPendingPayment({ attempt: 0, sessionId: 'cs_test_example' }).replaceAll('&#39;', "'");
+    expect(pending).toContain("form-action 'self'");
+    expect(pending).not.toContain('checkout.stripe.com');
+    expect(pending).toContain('/unlock/return?session_id=cs_test_example');
+    const fields = Object.fromEntries(buildCheckoutFields({
+      origin: 'https://startup-savvy.example',
+      entitlementId: '11111111-1111-4111-8111-111111111111',
+      integrationId: makeIntegrationId('abcdefgh'),
+    }));
+    expect(fields.success_url).toBe('https://startup-savvy.example/unlock/return?session_id={CHECKOUT_SESSION_ID}');
+    expect(fields.cancel_url).toBe('https://startup-savvy.example/unlock?cancelled=1');
   });
 
   it('keeps analytics local and does not render a TFN as a pack value', () => {
