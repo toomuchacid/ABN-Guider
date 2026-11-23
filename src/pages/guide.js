@@ -6,26 +6,26 @@ export function renderGuide() {
   const main = `
     <section class="page-head">
       <div class="wrap prose">
-        <p class="todo" role="note"><strong>TODO:</strong> the questions are a working stub. Field wording will be checked against the live ABR application in a later phase. The official form remains the source of truth.</p>
         <h1>ABN application guide</h1>
-        <p>Answer a few questions and we’ll line them up with the topics on the free ABN application. Your answers stay in this browser. They are not sent to our server.</p>
-        <p class="callout">The official form may ask for a tax file number. Type that only on register.business.gov.au. ${escapeHtml(brand.name)} never asks for a TFN, and this guide will stop you if a number looks like one.</p>
+        <p>The sole-trader questions are in the paid application pack. This public page does not collect your answers, and it does not send them anywhere.</p>
+        <p>Inside the pack, the questions follow the topics the official ABN application asks a sole trader about: who you are, what the business does, when it starts, the address type, GST, and whether you will use your own name or a business name. Each step links to the official page it is based on.</p>
+        <p>A company, partnership, trust, or a business with someone else involved, is told that this guide is for sole traders and pointed at the free official application.</p>
+        <p class="callout">Not tax, legal or financial advice. ABN registration is free at <a href="${escapeHtml(brand.abrUrl)}">abr.gov.au</a>. ${escapeHtml(brand.name)} does not fill in or lodge the government form.</p>
       </div>
     </section>
     <section>
       <div class="wrap">
-        <div id="guide-app">
-          <noscript>
-            <p class="callout">Turn on JavaScript to use the guide. The questions cover why you are applying, entity type, names, activity, location, contact details and a GST prompt. We don’t ask for a tax file number.</p>
-          </noscript>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="/unlock">Unlock the pack</a>
+          <a class="btn btn-secondary" href="/report">Open the pack if you already have access</a>
         </div>
       </div>
     </section>`;
   return renderDocument({
     title: 'ABN guide',
-    description: 'Guided questions that line up with the free Australian ABN application. Answers stay on your device. Not a government form.',
+    description: 'The sole-trader questions are in the paid pack. This page does not collect answers. Not a government form.',
     path: '/guide',
     main,
-    scripts: ['/assets/guide.js'],
+    scripts: [],
   });
 }

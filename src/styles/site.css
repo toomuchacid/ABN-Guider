@@ -427,12 +427,33 @@ textarea { min-height: 9rem; resize: vertical; }
   .hero { padding-top: 2rem; }
 }
 
+fieldset {
+  border: 0;
+  margin: 0 0 1rem;
+  padding: 0;
+  min-inline-size: 0;
+}
+
+legend { font-weight: 750; margin-bottom: 0.45rem; }
+
+.source-list, .next-list { padding-left: 1.2rem; }
+.source-list li, .next-list li { margin: 0.35rem 0 0.8rem; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @media print {
   .gov-banner, .site-header, .site-footer, .no-print, .btn { display: none !important; }
-  body { background: white; }
-  .field { break-inside: avoid; }
+  body { background: white; color: black; }
+  a { color: black; text-decoration: none; }
+  .next-list a[href]::after { content: " (" attr(href) ")"; font-size: 0.85em; }
+  .field, .check, .next-list li { break-inside: avoid; }
+  .callout { border: 1px solid #bbb; }
 }

@@ -154,7 +154,9 @@ Plausible and Cloudflare Web Analytics are cookie-less. The build refuses an uns
 
 Feedback posts to `/api/feedback` and is stored in KV. The form asks people not to include a tax file number. A message that is only an 8 or 9 digit number, or that says “TFN” next to one, is discarded.
 
-Questionnaire answers are kept in `sessionStorage` on the device. They are not uploaded.
+Questionnaire answers are kept in `localStorage` on the device. They are not uploaded and they are not logged. Delete my answers removes them. Email delivery of the pack is not implemented (`src/lib/guide/email-stub.js`).
+
+Operations, the lawyer’s review list, and the owner’s launch list are in [docs/runbook.md](docs/runbook.md), [docs/legal-review.md](docs/legal-review.md) and [docs/launch-checklist.md](docs/launch-checklist.md).
 
 ## Deploy
 
@@ -191,7 +193,7 @@ The split is there so a later migration does not have to untangle a framework.
 | `src/content/` | Import the same modules, or move the long text to MDX. |
 | `src/components/document.js` | `app/layout.tsx`. Keep the government banner in the layout, not per page. |
 | `src/pages/*.js` | Server components. The render functions already take no request data. |
-| `src/client/*.js` | Client components. The guide and name check already talk to DOM nodes and `sessionStorage`. |
+| `src/client/*.js` | Client components. The guide and name check already talk to DOM nodes and `localStorage`. |
 | `src/lib/` | Import unchanged from server code. No Node-only APIs. |
 | `functions/api/*` and `worker/index.js` | `app/api/*/route.js`, or leave them on Cloudflare. The Worker file only routes. |
 | `functions/_middleware.js` | `middleware.ts`. Keep the paid check on the server. |

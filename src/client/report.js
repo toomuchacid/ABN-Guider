@@ -1,33 +1,79 @@
-import { brand } from '../config/brand.js';
-import { packAsText, packFromAnswers, sanitiseAnswers } from '../lib/guide/pack.js';
+import { packAsText, packFromAnswers } from '../lib/guide/pack.js';
+import { CHECKLIST } from '../lib/guide/questions.js';
+import { clearGuideState, readGuideState, writeGuideState } from '../lib/guide/storage.js';
 import { labelForSource, safeRegisterHref, toneForStatus } from '../lib/name-check/contract.js';
 import { proposedNameKey } from '../lib/name-check/official-links.js';
 
-function savedAnswers() {
-  try {
-    const raw = JSON.parse(sessionStorage.getItem(brand.storageKey) || 'null');
-    if (!raw?.answers) return null;
-    const answers = sanitiseAnswers(raw.answers);
-    const hasAny = Object.values(answers).some(Boolean);
-    return hasAny ? answers : null;
-  } catch {
-    return null;
-  }
+function stores() {
+  return { local: localStorage, session: sessionStorage };
 }
 
-const answers = savedAnswers();
-const rows = packFromAnswers(answers || {});
-const note = document.querySelector('#pack-note');
+function savedAnswers() {
+  const state = readGuideState(stores());
+  const hasAny = Object.values(state.answers).some(Boolean);
+  return hasAny ? state.answers : null;
+}
 
-if (answers) {
-  for (const row of rows) {
+const examplePackNote = document.querySelector('#pack-note')?.textContent || '';
+
+function refreshPack() {
+  const answers = savedAnswers();
+  const live = packFromAnswers(answers || {});
+  for (const row of live) {
     const node = document.querySelector(`[data-field="${row.id}"]`);
     if (!node) continue;
-    node.textContent = row.value;
-    node.classList.remove('is-example');
+    if (answers) {
+      node.textContent = row.value;
+      node.classList.remove('is-example');
+    } else if (node.dataset.example) {
+      node.textContent = node.dataset.example;
+      node.classList.add('is-example');
+    }
   }
-  if (note) note.textContent = 'These are the answers saved in this browser. Copy them into the official application, which is still the source of truth.';
+  const note = document.querySelector('#pack-note');
+  if (note) {
+    note.textContent = answers
+      ? 'These are the answers saved in this browser. Copy them into the official application yourself. This page does not fill the form.'
+      : examplePackNote;
+  }
+  const riskInput = document.querySelector('#risk-name');
+  if (riskInput && !riskInput.value && answers?.tradingName) riskInput.value = answers.tradingName;
+  const state = readGuideState(stores());
+  for (const item of CHECKLIST) {
+    const box = document.querySelector(`#check-${item.id}`);
+    if (box) box.checked = Boolean(state.checks[item.id]);
+  }
+  return live;
 }
+
+refreshPack();
+window.addEventListener('guide-saved', () => refreshPack());
+
+document.querySelector('#delete-answers-pack')?.addEventListener('click', () => {
+  const note = document.querySelector('#delete-pack-note');
+  const confirm = document.querySelector('#delete-answers-pack-confirm');
+  if (note) note.hidden = false;
+  if (confirm) {
+    confirm.hidden = false;
+    confirm.focus();
+  }
+});
+
+document.querySelector('#delete-answers-pack-confirm')?.addEventListener('click', () => {
+  clearGuideState(stores());
+  window.dispatchEvent(new CustomEvent('guide-cleared'));
+  refreshPack();
+  const note = document.querySelector('#pack-note');
+  if (note) note.textContent = 'Answers stored in this browser have been deleted. The lines below are an example, not your application.';
+});
+
+document.querySelector('#checklist')?.addEventListener('change', (event) => {
+  const box = event.target;
+  if (!(box instanceof HTMLInputElement) || box.type !== 'checkbox') return;
+  const state = readGuideState(stores());
+  const id = box.id.replace(/^check-/, '');
+  writeGuideState(stores, { ...state, checks: { ...state.checks, [id]: box.checked } });
+});
 
 async function copyText(text, button, doneLabel) {
   const original = button.textContent;
@@ -49,7 +95,7 @@ for (const button of document.querySelectorAll('[data-copy]')) {
 }
 
 document.querySelector('#copy-all')?.addEventListener('click', (event) => {
-  const liveRows = rows.map((row) => ({
+  const liveRows = packFromAnswers(savedAnswers() || {}).map((row) => ({
     label: row.label,
     value: document.querySelector(`[data-field="${row.id}"]`)?.textContent || row.value,
   }));
@@ -64,7 +110,7 @@ const riskInput = document.querySelector('#risk-name');
 function savedProposedName() {
   const proposed = sessionStorage.getItem(proposedNameKey) || '';
   if (proposed.trim()) return proposed.trim();
-  return answers?.tradingName || '';
+  return savedAnswers()?.tradingName || '';
 }
 
 function formatWhen(iso) {
