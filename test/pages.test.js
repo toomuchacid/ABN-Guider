@@ -48,14 +48,20 @@ describe('pages', () => {
     expect(unlockHtml).toContain(stripeFormAction);
     expect(renderHome().replaceAll('&#39;', "'")).not.toContain('checkout.stripe.com');
 
-    const headers = headersFile();
-    const unlockHeader = headers.split('\n\n').find((block) => block.startsWith('/unlock\n'));
+    const headers = headersFile().split('\n\n');
+    const block = (path) => headers.find((item) => item.startsWith(`${path}\n`));
+    const unlockHeader = block('/unlock');
     expect(unlockHeader).toContain(stripeFormAction);
-    const siteHeader = headers.split('\n\n').find((block) => block.startsWith('/*\n'));
-    expect(siteHeader).toContain("form-action 'self'");
-    expect(siteHeader).not.toContain('checkout.stripe.com');
-    const returnHeader = headers.split('\n\n').find((block) => block.startsWith('/unlock/return\n'));
+    expect(unlockHeader.match(/Content-Security-Policy/g)).toHaveLength(1);
+    const siteHeader = block('/*');
+    expect(siteHeader).not.toContain('Content-Security-Policy');
+    const homeHeader = block('/');
+    expect(homeHeader).toContain("form-action 'self'");
+    expect(homeHeader).not.toContain('checkout.stripe.com');
+    const returnHeader = block('/unlock/return');
+    expect(returnHeader).toContain("form-action 'self'");
     expect(returnHeader).not.toContain('checkout.stripe.com');
+    expect(block('/api/*')).not.toContain('Content-Security-Policy');
 
     const pending = renderPendingPayment({ attempt: 0, sessionId: 'cs_test_example' }).replaceAll('&#39;', "'");
     expect(pending).toContain("form-action 'self'");

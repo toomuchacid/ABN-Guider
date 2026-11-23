@@ -65,23 +65,54 @@ export function securityHeaderEntries(options) {
   ];
 }
 
+/**
+ * Cloudflare sends every matching `_headers` policy, and a browser enforces
+ * all of them. The catch-all must not set a Content-Security-Policy, or its
+ * `form-action 'self'` stays in force on /unlock beside the Checkout exception.
+ */
 export function headersFile() {
-  const lines = (entries, extra = []) => [...entries, ...extra].map(([key, value]) => `  ${key}: ${value}`);
-  const block = (path, entries) => [`${path}`, ...lines(entries), ''].join('\n');
-  const shared = securityHeaderEntries();
-  const unlock = securityHeaderEntries({ allowStripeCheckout: true });
+  const block = (path, entries) => [path, ...entries.map(([key, value]) => `  ${key}: ${value}`), ''].join('\n');
+  const base = securityHeaderEntries().filter(([name]) => name !== 'Content-Security-Policy');
+  const policy = (allowStripeCheckout) => [['Content-Security-Policy', contentSecurityPolicy({ allowStripeCheckout })]];
+  const strict = policy(false);
+  const checkout = policy(true);
+  const hidden = [['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']];
+  const documents = [
+    '/',
+    '/index.html',
+    '/name-check',
+    '/name-check.html',
+    '/guide',
+    '/guide.html',
+    '/terms',
+    '/terms.html',
+    '/privacy',
+    '/privacy.html',
+    '/disclaimer',
+    '/disclaimer.html',
+    '/refunds',
+    '/refunds.html',
+    '/feedback',
+    '/feedback.html',
+    '/feedback/thanks',
+    '/feedback/thanks.html',
+    '/feedback/rejected',
+    '/feedback/rejected.html',
+    '/404.html',
+  ];
   return [
-    block('/*', shared),
-    block('/assets/*', [...shared, ['Cache-Control', 'public, max-age=3600']]),
-    block('/report', [...shared, ['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']]),
-    block('/report.html', [...shared, ['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']]),
-    block('/unlock/return', [...shared, ['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']]),
-    block('/unlock/return/', [...shared, ['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']]),
-    block('/api/*', [...shared, ['Cache-Control', 'no-store'], ['X-Robots-Tag', 'noindex']]),
-    // Replaces the /* policy. A second, stricter CSP header would still block Checkout.
-    block('/unlock', unlock),
-    block('/unlock/', unlock),
-    block('/unlock.html', unlock),
+    block('/*', base),
+    block('/assets/*', [['Cache-Control', 'public, max-age=3600']]),
+    block('/api/*', hidden),
+    ...documents.map((path) => block(path, strict)),
+    block('/report', [...strict, ...hidden]),
+    block('/report/', [...strict, ...hidden]),
+    block('/report.html', [...strict, ...hidden]),
+    block('/unlock/return', [...strict, ...hidden]),
+    block('/unlock/return/', [...strict, ...hidden]),
+    block('/unlock', checkout),
+    block('/unlock/', checkout),
+    block('/unlock.html', checkout),
   ].join('\n');
 }
 
