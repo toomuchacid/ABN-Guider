@@ -1,17 +1,19 @@
 import { brand } from '../config/brand.js';
+import { deliverPackByEmail } from '../lib/guide/email-stub.js';
 import {
-  EMPTY_ANSWERS,
-  ENTITIES,
-  GST_CHOICES,
-  REASONS,
-  STATES,
-  findTfnField,
-  missingCore,
-  packFromAnswers,
-  sanitiseAnswers,
-} from '../lib/guide/pack.js';
+  QUESTION_FIELDS,
+  STEPS,
+  STEP_COUNT,
+  gstGuidance,
+  routeMessage,
+  safeOfficialHref,
+  validateStep,
+} from '../lib/guide/questions.js';
+import { clearGuideState, readGuideState, writeGuideState } from '../lib/guide/storage.js';
 
-const mount = document.querySelector('#guide-app');
+function browserStores() {
+  return { local: localStorage, session: sessionStorage };
+}
 
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
@@ -28,25 +30,6 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-function load() {
-  try {
-    const raw = JSON.parse(sessionStorage.getItem(brand.storageKey) || 'null');
-    return {
-      step: Math.min(Math.max(Number(raw?.step) || 0, 0), 5),
-      answers: sanitiseAnswers(raw?.answers),
-    };
-  } catch {
-    return { step: 0, answers: { ...EMPTY_ANSWERS } };
-  }
-}
-
-function persist(state) {
-  const answers = sanitiseAnswers(state.answers);
-  if (findTfnField(answers)) return false;
-  sessionStorage.setItem(brand.storageKey, JSON.stringify({ version: 1, step: state.step, answers }));
-  return true;
-}
-
 function field(label, control) {
   const wrap = el('div');
   wrap.append(el('label', { for: control.id, text: label }), control);
@@ -57,15 +40,17 @@ function textInput(id, value, opts = {}) {
   return el('input', {
     id,
     name: id,
-    value,
+    value: value || '',
     maxlength: opts.max || 120,
     autocomplete: opts.autocomplete || 'off',
     type: opts.type || 'text',
+    required: opts.required || false,
   });
 }
 
-function choiceGroup(name, options, selected) {
-  const group = el('div');
+function choiceGroup(legend, name, options, selected) {
+  const group = el('fieldset');
+  group.append(el('legend', { text: legend }));
   for (const option of options) {
     const input = el('input', { type: 'radio', name, value: option.value });
     if (option.value === selected) input.checked = true;
@@ -77,32 +62,16 @@ function choiceGroup(name, options, selected) {
   return group;
 }
 
-function validate(step, answers) {
-  const errors = [];
-  if (findTfnField(answers)) errors.push('That looks like a tax file number. Remove it. We never collect a TFN.');
-  if (step === 0) {
-    if (!answers.reason) errors.push('Choose why you are applying.');
-    if (!answers.entityType) errors.push('Choose an entity type.');
+function sourceList(sources) {
+  const list = el('ul', { class: 'source-list' });
+  for (const source of sources) {
+    const href = safeOfficialHref(source.href);
+    if (!href) continue;
+    const link = el('a', { href, target: '_blank', rel: 'noopener noreferrer', text: source.label });
+    link.append(el('span', { class: 'sr-only', text: ' (opens in a new tab)' }));
+    list.append(el('li', {}, [link]));
   }
-  if (step === 1) {
-    if (answers.entityType === 'sole-trader') {
-      if (!answers.givenName || !answers.familyName) errors.push('Enter your given name and family name.');
-    } else if (answers.entityType && answers.entityType !== 'unsure' && !answers.entityName) {
-      errors.push('Enter the entity name.');
-    }
-  }
-  if (step === 2) {
-    if (answers.activity.trim().length < 8) errors.push('Describe the activity in a short sentence.');
-    if (!answers.state) errors.push('Choose where the business mainly operates.');
-    if (!answers.startDate) errors.push('Enter a start date.');
-  }
-  if (step === 3) {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(answers.email)) errors.push('Enter an email address you can copy onto the official form.');
-    if (!answers.suburb) errors.push('Enter a suburb or town.');
-    if (answers.state !== 'Outside Australia' && !/^\d{4}$/.test(answers.postcode)) errors.push('Enter a 4-digit postcode.');
-  }
-  if (step === 4 && !answers.gst) errors.push('Choose the GST answer that matches your current expectation.');
-  return errors;
+  return list;
 }
 
 function readForm(form, answers) {
@@ -111,141 +80,200 @@ function readForm(form, answers) {
   for (const [key, value] of data.entries()) {
     if (key in next) next[key] = String(value);
   }
-  if (!data.has('reason')) next.reason = answers.reason;
-  return sanitiseAnswers(next);
+  return next;
 }
 
-const steps = [
-  {
-    title: 'Who is applying?',
-    render: (answers) => [
-      el('p', { text: 'This matches the opening questions on the ABN application: why you want an ABN, and what sort of entity is applying.' }),
-      el('p', { class: 'fine', text: 'Reason for the application' }),
-      choiceGroup('reason', REASONS, answers.reason),
-      el('p', { class: 'fine', text: 'Entity type' }),
-      choiceGroup('entityType', ENTITIES, answers.entityType),
-    ],
-  },
-  {
-    title: 'Names',
-    render: (answers) => {
-      const sole = answers.entityType === 'sole-trader';
-      const nodes = [el('p', { text: 'An ABN does not reserve a trading name. Registering a business name is a separate ASIC process, with its own fee.' })];
-      if (sole) {
-        nodes.push(field('Given name', textInput('givenName', answers.givenName, { autocomplete: 'given-name' })));
-        nodes.push(field('Family name', textInput('familyName', answers.familyName, { autocomplete: 'family-name' })));
-      } else {
-        nodes.push(field('Entity name', textInput('entityName', answers.entityName, { max: 120 })));
-      }
-      nodes.push(field('Trading or business name, if you have one', textInput('tradingName', answers.tradingName, { max: 120 })));
-      return nodes;
-    },
-  },
-  {
-    title: 'What the business does',
-    render: (answers) => [
-      el('p', { text: 'Describe the main activity in your own words. The official form will also ask you to pick an industry category. We don’t invent that code.' }),
-      field('Main activity', el('textarea', { id: 'activity', name: 'activity', maxlength: 500, text: answers.activity })),
-      field('Main location', (() => {
-        const select = el('select', { id: 'state', name: 'state' });
-        select.append(el('option', { value: '', text: 'Choose a state or territory' }));
-        for (const state of STATES) {
-          const option = el('option', { value: state, text: state });
-          if (state === answers.state) option.selected = true;
-          select.append(option);
-        }
-        return select;
-      })()),
-      field('Date the business starts, or started', textInput('startDate', answers.startDate, { type: 'date' })),
-    ],
-  },
-  {
-    title: 'How the form can reach you',
-    render: (answers) => [
-      el('p', { text: 'These stay in this browser. Leave the street blank if you’d rather type it only on the official site.' }),
-      field('Email', textInput('email', answers.email, { type: 'email', autocomplete: 'email' })),
-      field('Phone (optional)', textInput('phone', answers.phone, { type: 'tel', autocomplete: 'tel' })),
-      field('Street (optional)', textInput('street', answers.street, { autocomplete: 'address-line1', max: 120 })),
-      field('Suburb or town', textInput('suburb', answers.suburb, { autocomplete: 'address-level2' })),
+function renderStep(answers, step) {
+  if (step === 0) {
+    return [
+      choiceGroup('Structure', 'entityType', QUESTION_FIELDS.entities, answers.entityType),
+      choiceGroup('Is anyone else part of the business?', 'associates', QUESTION_FIELDS.associates, answers.associates),
+    ];
+  }
+  if (step === 1) {
+    return [
+      field('Given name', textInput('givenName', answers.givenName, { autocomplete: 'given-name', required: true })),
+      field('Family name', textInput('familyName', answers.familyName, { autocomplete: 'family-name', required: true })),
+      field('Date of birth', textInput('dateOfBirth', answers.dateOfBirth, { type: 'date', autocomplete: 'bday', required: true })),
+    ];
+  }
+  if (step === 2) {
+    return [
+      field('Main activity, in your own words', el('textarea', {
+        id: 'activity',
+        name: 'activity',
+        maxlength: 500,
+        required: true,
+        text: answers.activity,
+      })),
+    ];
+  }
+  if (step === 3) {
+    const select = el('select', { id: 'state', name: 'state', required: true });
+    select.append(el('option', { value: '', text: 'Choose a state or territory' }));
+    for (const state of QUESTION_FIELDS.states) {
+      const option = el('option', { value: state, text: state });
+      if (state === answers.state) option.selected = true;
+      select.append(option);
+    }
+    return [
+      field('Date the business starts, or started', textInput('startDate', answers.startDate, { type: 'date', required: true })),
+      choiceGroup('Address type', 'addressType', QUESTION_FIELDS.addressTypes, answers.addressType),
+      field('State or territory', select),
+      field('Suburb or town', textInput('suburb', answers.suburb, { autocomplete: 'address-level2', required: true })),
       field('Postcode', textInput('postcode', answers.postcode, { autocomplete: 'postal-code', max: 12 })),
-      field('Authorised contact, if different from the legal name', textInput('contactName', answers.contactName, { max: 120 })),
-    ],
-  },
-  {
-    title: 'GST prompt',
-    render: (answers) => [
-      el('p', { class: 'callout', text: 'This is not advice. Many small businesses register for GST when turnover is $75,000 or more. That figure is general public information and can change. Confirm it on the ATO website, and choose the answer you expect to give the official form.' }),
-      choiceGroup('gst', GST_CHOICES, answers.gst),
-    ],
-  },
-];
-
-function render() {
-  const state = load();
-  mount.replaceChildren();
-  const form = el('form', { class: 'panel stack' });
-  form.append(
-    el('p', { class: 'todo', text: 'TODO: confirm this wording against the live ABR screens before calling the pack a complete field match.' }),
-    el('p', { class: 'progress', text: `Step ${state.step + 1} of 6` }),
-    el('h2', { text: state.step === 5 ? 'Review' : steps[state.step].title }),
-  );
-  const errorBox = el('div', { class: 'form-error', role: 'alert', tabindex: '-1', hidden: true });
-  form.append(errorBox);
-
-  if (state.step < 5) {
-    for (const node of steps[state.step].render(state.answers)) form.append(node);
-  } else {
-    const missing = missingCore(state.answers);
-    if (missing.length) form.append(el('p', { class: 'callout', text: `Still worth adding: ${missing.join(', ')}.` }));
-    const list = el('div', { class: 'stack' });
-    for (const row of packFromAnswers(state.answers)) {
-      const block = el('div');
-      block.append(el('h3', { text: row.label }), el('p', { text: row.value }));
-      list.append(block);
-    }
-    form.append(
-      el('p', { text: 'This review stays on your device. The paid pack adds copy buttons and the handoff to the free official application.' }),
-      list,
-      el('a', { class: 'btn btn-primary', href: '/unlock', text: `Unlock the copy-ready pack` }),
-    );
+      field('Street (optional)', textInput('street', answers.street, { autocomplete: 'address-line1', max: 120 })),
+      field('Email', textInput('email', answers.email, { type: 'email', autocomplete: 'email', required: true })),
+      field('Phone (optional)', textInput('phone', answers.phone, { type: 'tel', autocomplete: 'tel' })),
+    ];
   }
-
-  const actions = el('div', { class: 'cta-row' });
-  if (state.step > 0) {
-    actions.append(el('button', { class: 'btn btn-secondary', type: 'button', text: 'Back' }));
+  if (step === 4) {
+    return [
+      choiceGroup('What do you plan to do about a business name?', 'nameIntent', QUESTION_FIELDS.nameIntents, answers.nameIntent),
+      field('Business or trading name, if you have one', textInput('tradingName', answers.tradingName, { max: 120 })),
+    ];
   }
-  if (state.step < 5) actions.append(el('button', { class: 'btn btn-primary', type: 'submit', text: state.step === 4 ? 'Review answers' : 'Continue' }));
-  form.append(actions);
-  mount.append(form);
-
-  form.querySelector('.btn-secondary')?.addEventListener('click', () => {
-    const answers = state.step < 5 ? readForm(form, state.answers) : state.answers;
-    if (!persist({ step: state.step - 1, answers })) {
-      errorBox.hidden = false;
-      errorBox.textContent = 'Remove the tax file number before going back.';
-      return;
-    }
-    render();
-  });
-
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    if (state.step >= 5) return;
-    const answers = readForm(form, state.answers);
-    const errors = validate(state.step, answers);
-    if (errors.length) {
-      errorBox.hidden = false;
-      errorBox.textContent = errors[0];
-      errorBox.focus();
-      return;
-    }
-    if (!persist({ step: state.step + 1, answers })) {
-      errorBox.hidden = false;
-      errorBox.textContent = 'Remove the tax file number. We never store one.';
-      return;
-    }
-    render();
-  });
+  return [
+    el('p', { class: 'callout', text: gstGuidance(answers).text }),
+    choiceGroup('What do you expect to tell the official form about GST?', 'gst', QUESTION_FIELDS.gst, answers.gst),
+    choiceGroup('Turnover, compared with the published A$75,000 threshold', 'turnover', QUESTION_FIELDS.turnover, answers.turnover),
+  ];
 }
 
-if (mount) render();
+export function mountQuestionnaire(mount, stores = browserStores()) {
+  function render() {
+    const state = readGuideState(stores);
+    mount.replaceChildren();
+    const form = el('form', { class: 'panel stack', id: 'questionnaire' });
+    const step = STEPS[state.step];
+    form.append(
+      el('p', { class: 'progress', text: `Step ${state.step + 1} of ${STEP_COUNT}` }),
+      el('h2', { id: 'question-title', text: step.title }),
+      step.intro ? el('p', { text: step.intro }) : null,
+      sourceList(step.sources),
+    );
+    const errorBox = el('div', { id: 'question-error', class: 'form-error', role: 'alert', tabindex: '-1', hidden: true });
+    form.append(errorBox);
+    for (const node of renderStep(state.answers, state.step)) form.append(node);
+
+    const actions = el('div', { class: 'cta-row' });
+    if (state.step > 0) actions.append(el('button', { class: 'btn btn-secondary', type: 'button', id: 'question-back', text: 'Back' }));
+    actions.append(el('button', {
+      class: 'btn btn-primary',
+      type: 'submit',
+      text: state.step === STEP_COUNT - 1 ? 'Save and show my pack' : 'Continue',
+    }));
+    form.append(actions, deleteControls());
+    mount.append(form);
+    wire(form, state);
+  }
+
+  function deleteControls() {
+    const wrap = el('div', { class: 'stack' });
+    wrap.append(
+      el('button', { class: 'btn btn-secondary', type: 'button', id: 'delete-answers', text: 'Delete my answers' }),
+      el('p', { id: 'delete-note', class: 'fine', hidden: true, text: 'This removes the answers stored in this browser. It does not contact us, and it does not change anything on a government site.' }),
+      el('button', { class: 'btn btn-secondary', type: 'button', id: 'delete-answers-confirm', hidden: true, text: 'Confirm delete' }),
+    );
+    return wrap;
+  }
+
+  function showError(form, message) {
+    const errorBox = form.querySelector('#question-error');
+    errorBox.hidden = false;
+    errorBox.textContent = message;
+    errorBox.focus();
+  }
+
+  function wire(form, state) {
+    form.querySelector('#question-back')?.addEventListener('click', () => {
+      const answers = readForm(form, state.answers);
+      const saved = writeGuideState(stores, { step: state.step - 1, answers, checks: readGuideState(stores).checks });
+      if (!saved.ok) {
+        showError(form, saved.error);
+        return;
+      }
+      render();
+      formFocus();
+    });
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const answers = readForm(form, state.answers);
+      const result = validateStep(state.step, answers);
+      if (result.errors.length) {
+        showError(form, result.errors[0]);
+        return;
+      }
+      const stop = routeMessage(result.route.reason);
+      if (stop) {
+        const saved = writeGuideState(stores, { step: 0, answers, checks: readGuideState(stores).checks });
+        if (!saved.ok) {
+          showError(form, saved.error);
+          return;
+        }
+        showStop(form, stop);
+        window.dispatchEvent(new CustomEvent('guide-saved'));
+        return;
+      }
+      const nextStep = Math.min(state.step + 1, STEP_COUNT - 1);
+      const saved = writeGuideState(stores, { step: state.step === STEP_COUNT - 1 ? state.step : nextStep, answers, checks: readGuideState(stores).checks });
+      if (!saved.ok) {
+        showError(form, saved.error);
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('guide-saved'));
+      if (state.step === STEP_COUNT - 1) {
+        render();
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        document.querySelector('#summary')?.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+        return;
+      }
+      render();
+      formFocus();
+    });
+
+    form.querySelector('#delete-answers')?.addEventListener('click', () => {
+      form.querySelector('#delete-note').hidden = false;
+      const confirm = form.querySelector('#delete-answers-confirm');
+      confirm.hidden = false;
+      confirm.focus();
+    });
+    form.querySelector('#delete-answers-confirm')?.addEventListener('click', () => {
+      clearGuideState(stores);
+      window.dispatchEvent(new CustomEvent('guide-saved'));
+      render();
+      formFocus();
+    });
+  }
+
+  function showStop(form, message) {
+    const existing = form.querySelector('#route-stop');
+    existing?.remove();
+    const note = el('div', { id: 'route-stop', class: 'callout', role: 'status', tabindex: '-1' });
+    note.append(
+      el('p', { text: message }),
+      el('a', { class: 'btn btn-primary', href: 'https://register.business.gov.au/', target: '_blank', rel: 'noopener noreferrer', text: 'Continue on the free official application' }),
+    );
+    note.querySelector('a').append(el('span', { class: 'sr-only', text: ' (opens in a new tab)' }));
+    form.querySelector('.cta-row')?.before(note);
+    note.focus();
+  }
+
+  function formFocus() {
+    const title = mount.querySelector('#question-title');
+    if (title) {
+      title.setAttribute('tabindex', '-1');
+      title.focus();
+    }
+  }
+
+  window.addEventListener('guide-cleared', () => render());
+  render();
+  const email = deliverPackByEmail();
+  const emailNote = document.querySelector('#email-stub');
+  if (emailNote && !email.sent) emailNote.textContent = email.detail;
+}
+
+const paidMount = document.querySelector('#guide-app[data-paid="true"]');
+if (paidMount) mountQuestionnaire(paidMount);

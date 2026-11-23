@@ -40,12 +40,12 @@ export const home = {
       body: 'Green, amber and red for domains, trade marks and business names. A failed check stays grey. It is never shown as a clear result.',
     },
     {
-      title: 'Answer the ABN guide',
-      body: 'Short questions line up with the public application: who is applying, the activity, where you operate, and how to reach you. We never ask for a tax file number.',
+      title: 'Unlock the sole-trader pack',
+      body: `The questions are in the paid pack (${formatAud()} once). They cover who you are, the activity, the start date, the address type, GST and a business-name intention. We never ask for a tax file number.`,
     },
     {
       title: 'Copy it onto the free form',
-      body: `Unlock the pack for ${formatAud()}, then continue to register.business.gov.au. Card payments are handled by Stripe. We don’t see your card number.`,
+      body: 'You transcribe the summary into the official application yourself. We do not fill, submit or call the government form. Card payments are handled by Stripe. We don’t see your card number.',
     },
   ],
   separate: [
@@ -57,7 +57,7 @@ export const home = {
   included: [
     'A guided questionnaire mapped to the public ABN application topics',
     'A copy-ready summary that stays in your browser',
-    'Plain-English name-check rows, with sample data until live registers are connected',
+    'Plain-English name-check rows in the paid pack. A failed check is never shown as available',
     'A direct handoff to the free official application',
     'One payment. No subscription and no account',
   ],
@@ -92,11 +92,11 @@ export const faq = [
   },
   {
     q: 'Are the name-check results live?',
-    a: 'Not yet. Phase 1 shows sample rows so you can see how a result will read. Live checks against domains, IP Australia, ASIC and ABN Lookup are the next build. Until then, every sample is labelled as a sample, and a failed row is never shown as available.',
+    a: 'The public page does not run them. The paid pack checks DNS for .com.au, .au and .net.au, and links to the official trade mark and business-name searches. ABN Lookup runs only when it is configured. A failed or unfinished check is never shown as available, and none of the lights is a clearance.',
   },
   {
     q: 'Where do my questionnaire answers go?',
-    a: 'They stay in this browser, on this device. They are not sent to our server. Clearing the site’s data for this browser removes them. The paid page can only refill them on the same device.',
+    a: 'They stay in this browser’s local storage on this device. They are not sent to our server and they are not logged. Delete my answers, on the paid pack, removes them. The pack can only refill them on the same device.',
   },
   {
     q: 'Can I get a refund?',

@@ -22,14 +22,43 @@ export const GST_CHOICES = [
   { value: 'unsure', label: 'I’m not sure' },
 ];
 
+export const ASSOCIATES = [
+  { value: 'no', label: 'No. It is just me.', hint: 'You are applying as a sole trader, on your own.' },
+  { value: 'yes', label: 'Yes. Someone else is part of this business.', hint: 'A partner, company, trust or other associate. This guide will stop here.' },
+];
+
+export const ADDRESS_TYPES = [
+  { value: 'home', label: 'Mainly at my home' },
+  { value: 'premises', label: 'At its own premises' },
+  { value: 'mobile', label: 'No fixed premises (mobile or online)' },
+  { value: 'outside', label: 'Mainly outside Australia' },
+];
+
+export const NAME_INTENTS = [
+  { value: 'own-name', label: 'I will use my own name' },
+  { value: 'register', label: 'I intend to register a business name' },
+  { value: 'already', label: 'I already have a business name' },
+  { value: 'unsure', label: 'I am not sure yet' },
+];
+
+export const TURNOVER = [
+  { value: 'under', label: 'I expect turnover under A$75,000' },
+  { value: 'over', label: 'I expect turnover of A$75,000 or more' },
+  { value: 'unsure', label: 'I am not sure' },
+];
+
 export const EMPTY_ANSWERS = {
   reason: '',
   entityType: '',
+  associates: '',
   givenName: '',
   familyName: '',
+  dateOfBirth: '',
   entityName: '',
   tradingName: '',
+  nameIntent: '',
   activity: '',
+  addressType: '',
   state: '',
   startDate: '',
   email: '',
@@ -39,6 +68,7 @@ export const EMPTY_ANSWERS = {
   postcode: '',
   contactName: '',
   gst: '',
+  turnover: '',
 };
 
 const LIMITS = {
@@ -54,6 +84,7 @@ const LIMITS = {
   postcode: 12,
   contactName: 120,
   startDate: 20,
+  dateOfBirth: 20,
 };
 
 function clean(value, max) {
@@ -68,16 +99,21 @@ export function sanitiseAnswers(input) {
   }
   if (!REASONS.some((item) => item.value === answers.reason)) answers.reason = '';
   if (!ENTITIES.some((item) => item.value === answers.entityType)) answers.entityType = '';
+  if (!ASSOCIATES.some((item) => item.value === answers.associates)) answers.associates = '';
+  if (!ADDRESS_TYPES.some((item) => item.value === answers.addressType)) answers.addressType = '';
+  if (!NAME_INTENTS.some((item) => item.value === answers.nameIntent)) answers.nameIntent = '';
+  if (!TURNOVER.some((item) => item.value === answers.turnover)) answers.turnover = '';
   if (!STATES.includes(answers.state)) answers.state = '';
   if (!GST_CHOICES.some((item) => item.value === answers.gst)) answers.gst = '';
   if (answers.startDate && !/^\d{4}-\d{2}-\d{2}$/.test(answers.startDate)) answers.startDate = '';
-  if (answers.postcode && answers.state !== 'Outside Australia' && !/^\d{4}$/.test(answers.postcode)) {
+  if (answers.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(answers.dateOfBirth)) answers.dateOfBirth = '';
+  if (answers.postcode && answers.state !== 'Outside Australia' && answers.addressType !== 'outside' && !/^\d{4}$/.test(answers.postcode)) {
     answers.postcode = answers.postcode.replace(/\D/g, '').slice(0, 4);
   }
   return answers;
 }
 
-const STRUCTURED_FIELDS = new Set(['startDate', 'postcode', 'email', 'phone']);
+const STRUCTURED_FIELDS = new Set(['startDate', 'dateOfBirth', 'postcode', 'email', 'phone']);
 
 export function findTfnField(answers) {
   for (const [key, value] of Object.entries(answers)) {
@@ -125,18 +161,22 @@ export function addressLine(answers) {
 export function packFromAnswers(raw) {
   const answers = sanitiseAnswers(raw);
   const gst = labelOf(GST_CHOICES, answers.gst);
+  const turnover = labelOf(TURNOVER, answers.turnover);
+  const gstValue = [gst, turnover].filter(Boolean).join(' — ') || '';
   return [
-    { id: 'reason', label: 'Reason for applying', value: blank(labelOf(REASONS, answers.reason)) },
     { id: 'entityType', label: 'Entity type', value: blank(labelOf(ENTITIES, answers.entityType)) },
+    { id: 'associates', label: 'Anyone else in the business', value: blank(labelOf(ASSOCIATES, answers.associates)) },
     { id: 'legalName', label: 'Legal name on the application', value: legalName(answers) },
-    { id: 'tradingName', label: 'Trading or business name', value: blank(answers.tradingName, 'No separate trading name entered') },
-    { id: 'activity', label: 'Main business activity, in plain English', value: blank(answers.activity) },
+    { id: 'dateOfBirth', label: 'Date of birth', value: blank(answers.dateOfBirth) },
+    { id: 'activity', label: 'Main business activity, in your own words', value: blank(answers.activity) },
     { id: 'startDate', label: 'Expected or actual start date', value: blank(answers.startDate) },
-    { id: 'location', label: 'Where the business is mainly carried on', value: addressLine(answers) },
+    { id: 'addressType', label: 'Where the business mainly operates', value: blank(labelOf(ADDRESS_TYPES, answers.addressType)) },
+    { id: 'location', label: 'Address to copy onto the official form', value: addressLine(answers) },
+    { id: 'nameIntent', label: 'Business name intention', value: blank(labelOf(NAME_INTENTS, answers.nameIntent)) },
+    { id: 'tradingName', label: 'Trading or business name', value: blank(answers.tradingName, 'No separate trading name entered') },
     { id: 'email', label: 'Business email', value: blank(answers.email) },
     { id: 'phone', label: 'Business phone', value: blank(answers.phone, 'Not entered') },
-    { id: 'contact', label: 'Authorised contact', value: contactLine(answers) },
-    { id: 'gst', label: 'GST registration intention', value: blank(gst) },
+    { id: 'gst', label: 'GST registration intention', value: blank(gstValue) },
   ];
 }
 
@@ -146,16 +186,18 @@ export function packAsText(rows) {
 
 export function missingCore(answers) {
   const cleanAnswers = sanitiseAnswers(answers);
+  if (cleanAnswers.entityType && cleanAnswers.entityType !== 'sole-trader') return [];
+  if (cleanAnswers.associates === 'yes') return [];
   const missing = [];
-  if (!cleanAnswers.reason) missing.push('why you are applying');
-  if (!cleanAnswers.entityType) missing.push('entity type');
-  if (cleanAnswers.entityType === 'sole-trader') {
-    if (!cleanAnswers.givenName || !cleanAnswers.familyName) missing.push('your given and family name');
-  } else if (cleanAnswers.entityType && !cleanAnswers.entityName) {
-    missing.push('the entity name');
-  }
+  if (!cleanAnswers.entityType || !cleanAnswers.associates) missing.push('whether you are a sole trader applying on your own');
+  if (!cleanAnswers.givenName || !cleanAnswers.familyName) missing.push('your given and family name');
+  if (!cleanAnswers.dateOfBirth) missing.push('your date of birth');
   if (!cleanAnswers.activity) missing.push('what the business does');
+  if (!cleanAnswers.startDate) missing.push('a start date');
+  if (!cleanAnswers.addressType) missing.push('the address type');
   if (!cleanAnswers.state) missing.push('the state or territory');
   if (!cleanAnswers.email) missing.push('an email address');
+  if (!cleanAnswers.nameIntent) missing.push('your business-name intention');
+  if (!cleanAnswers.gst || !cleanAnswers.turnover) missing.push('the GST answers');
   return missing;
 }
