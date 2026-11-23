@@ -144,7 +144,7 @@ export function mountQuestionnaire(mount, stores = browserStores()) {
   function render() {
     const state = readGuideState(stores);
     mount.replaceChildren();
-    const form = el('form', { class: 'panel stack', id: 'questionnaire' });
+    const form = el('form', { class: 'panel stack', id: 'questionnaire', novalidate: true });
     const step = STEPS[state.step];
     form.append(
       el('p', { class: 'progress', text: `Step ${state.step + 1} of ${STEP_COUNT}` }),

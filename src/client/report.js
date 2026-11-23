@@ -14,6 +14,8 @@ function savedAnswers() {
   return hasAny ? state.answers : null;
 }
 
+const examplePackNote = document.querySelector('#pack-note')?.textContent || '';
+
 function refreshPack() {
   const answers = savedAnswers();
   const live = packFromAnswers(answers || {});
@@ -29,7 +31,11 @@ function refreshPack() {
     }
   }
   const note = document.querySelector('#pack-note');
-  if (note && answers) note.textContent = 'These are the answers saved in this browser. Copy them into the official application yourself. This page does not fill the form.';
+  if (note) {
+    note.textContent = answers
+      ? 'These are the answers saved in this browser. Copy them into the official application yourself. This page does not fill the form.'
+      : examplePackNote;
+  }
   const riskInput = document.querySelector('#risk-name');
   if (riskInput && !riskInput.value && answers?.tradingName) riskInput.value = answers.tradingName;
   const state = readGuideState(stores());
